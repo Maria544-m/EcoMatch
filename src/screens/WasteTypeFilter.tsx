@@ -1,205 +1,119 @@
-// Importa o React
 import React from 'react';
-
-// Importa componentes do React Native
 import {
-  ScrollView,       // Permite rolagem horizontal ou vertical
-  TouchableOpacity, // Botão clicável
-  Text,             // Exibe textos
-  StyleSheet,       // Cria estilos
-  View              // Container para agrupar componentes
+  ScrollView,
+  TouchableOpacity,
+  Text,
+  StyleSheet,
+  View,
+  Platform
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 
-// Define as propriedades que o componente receberá
 interface Props {
-
-  // Lista dos tipos atualmente selecionados
   selectedTypes: string[];
-
-  // Função chamada quando o usuário seleciona um tipo
   onSelect: (type: string) => void;
-
-  // Lista de opções disponíveis
   options: string[];
 }
 
-// Componente responsável pelos filtros de resíduos
+const WASTE_ICONS: { [key: string]: any } = {
+  plastico: 'water',
+  papel: 'document-text',
+  vidro: 'wine',
+  metal: 'construct',
+  eletronicos: 'desktop',
+  pilhas: 'battery-dead',
+};
+
 export const WasteTypeFilter: React.FC<Props> = ({
-
-  // Tipos selecionados
   selectedTypes,
-
-  // Função de seleção
   onSelect,
-
-  // Lista de opções
   options
-
 }) => {
-
   return (
-
-    // Container principal dos filtros
     <View style={styles.wrapper}>
-
-      {/* Scroll horizontal para os filtros */}
       <ScrollView
-
-        // Permite rolagem horizontal
         horizontal
-
-        // Oculta a barra de rolagem
+        // Importante para garantir que o scroll funcione no Android/iOS
+        nestedScrollEnabled={true} 
         showsHorizontalScrollIndicator={false}
-
-        // Estilo interno do conteúdo
         contentContainerStyle={styles.container}
       >
-
-        {/* Percorre todas as opções de resíduos */}
         {options.map(type => {
-
-          // Verifica se o item está selecionado
           const isSelected = selectedTypes.includes(type);
+          const iconName = WASTE_ICONS[type] || 'leaf';
 
           return (
-
-            // Botão do filtro
             <TouchableOpacity
-
-              // Chave única para o React
               key={type}
-
-              // Quando clicar, chama a função de seleção
               onPress={() => onSelect(type)}
-
-              // Efeito de transparência ao clicar
-              activeOpacity={0.7}
-
-              // Aplica estilos normais e selecionados
+              activeOpacity={0.8}
               style={[
                 styles.chip,
                 isSelected && styles.selectedChip
               ]}
             >
-
-              {/* Texto do botão */}
+              <Ionicons 
+                name={iconName} 
+                size={16} 
+                color={isSelected ? 'white' : '#4CAF50'} 
+                style={{ marginRight: 6 }}
+              />
               <Text
                 style={[
                   styles.text,
                   isSelected && styles.selectedText
                 ]}
               >
-
-                {/* 
-                  Deixa a primeira letra maiúscula
-                  Exemplo:
-                  plastico -> Plastico
-                  vidro -> Vidro
-                */}
                 {type.charAt(0).toUpperCase() + type.slice(1)}
-
               </Text>
-
             </TouchableOpacity>
           );
         })}
-
       </ScrollView>
-
     </View>
   );
 };
 
-// Estilos do componente
 const styles = StyleSheet.create({
-
-  // Container externo dos filtros
   wrapper: {
-
-    // Fica sobre o mapa
-    position: 'absolute',
-
-    // Distância do topo da tela
-    top: 50,
-
-    // Garante que fique acima de outros componentes
-    zIndex: 10,
-
-    // Ocupa toda a largura da tela
+    // Ajuste de posicionamento para não bloquear o mapa e permitir o toque
     width: '100%',
+    backgroundColor: 'transparent',
+    zIndex: 999,
   },
-
-  // Área interna do ScrollView
   container: {
-
-    // Espaçamento horizontal
     paddingHorizontal: 15,
-
-    // Espaçamento vertical
     paddingVertical: 10,
+    // Garante que os itens tenham espaço para respirar
+    flexDirection: 'row',
+    alignItems: 'center',
   },
-
-  // Estilo padrão dos botões de filtro
   chip: {
-
-    // Fundo branco
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: 'white',
-
-    // Espaçamento interno horizontal
-    paddingHorizontal: 18,
-
-    // Espaçamento interno vertical
+    paddingHorizontal: 16,
     paddingVertical: 10,
-
-    // Bordas arredondadas
-    borderRadius: 25,
-
-    // Espaçamento entre os botões
+    borderRadius: 20,
     marginRight: 10,
-
-    // Sombra Android
-    elevation: 5,
-
-    // Configuração da sombra iOS
+    elevation: 4,
     shadowColor: '#000',
-
-    // Posição da sombra
-    shadowOffset: {
-      width: 0,
-      height: 2
-    },
-
-    // Transparência da sombra
-    shadowOpacity: 0.2,
-
-    // Suavização da sombra
-    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 3,
+    borderWidth: 1,
+    borderColor: '#eee',
   },
-
-  // Estilo aplicado quando o filtro está selecionado
   selectedChip: {
-
-    // Verde padrão do EcoMatch
     backgroundColor: '#4CAF50',
+    borderColor: '#4CAF50',
   },
-
-  // Texto padrão do botão
   text: {
-
-    // Cor escura
-    color: '#333',
-
-    // Tamanho da fonte
-    fontSize: 14,
-
-    // Peso da fonte
-    fontWeight: '600',
+    color: '#555',
+    fontSize: 13,
+    fontWeight: 'bold',
   },
-
-  // Texto quando selecionado
   selectedText: {
-
-    // Cor branca
     color: 'white',
   }
 });

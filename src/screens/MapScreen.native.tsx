@@ -1,11 +1,4 @@
-// ======================================================
-// IMPORTAÇÕES
-// ======================================================
-
-// Hooks do React
-import React, { useState, useEffect, useRef } from 'react';
-
-// Componentes do React Native
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   StyleSheet,
@@ -15,242 +8,125 @@ import {
   Modal,
   ScrollView,
   Linking,
-  Dimensions
+  Dimensions,
+  Platform,
+  Animated
 } from 'react-native';
-
-// Componente de mapa
-import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
-
-// Biblioteca para acessar localização do usuário
+import MapView, { Marker, PROVIDER_GOOGLE, Callout } from 'react-native-maps';
 import * as Location from 'expo-location';
-
-// Funções personalizadas do projeto
+import { Ionicons } from '@expo/vector-icons';
 import { fetchRecyclingPoints, WASTE_TAGS } from './overpassUtils';
-import { WasteTypeFilter } from './WasteTypeFilter';
 
-// ======================================================
-// COMPONENTE PRINCIPAL
-// ======================================================
+const { width, height } = Dimensions.get('window');
+
+const WASTE_ICONS: { [key: string]: any } = {
+  plastico: 'water',
+  papel: 'document-text',
+  vidro: 'wine',
+  metal: 'construct',
+  eletronicos: 'desktop',
+  pilhas: 'battery-dead',
+};
 
 const MapScreen = () => {
-
-  // Armazena a localização atual do usuário
   const [location, setLocation] = useState<any>(null);
-
-  // Armazena os ecopontos encontrados
   const [points, setPoints] = useState<any[]>([]);
-
-  // Controla o loading da tela
   const [loading, setLoading] = useState(true);
-
-  // Guarda o ponto selecionado para mostrar no modal
   const [selectedPoint, setSelectedPoint] = useState<any>(null);
-
-  // Guarda os tipos de resíduos selecionados pelo usuário
   const [selectedWasteTypes, setSelectedWasteTypes] = useState<string[]>([]);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  // Referência do mapa para movimentá-lo programaticamente
   const mapRef = useRef<MapView>(null);
+  const slideAnim = useRef(new Animated.Value(-width * 0.7)).current;
 
-  // ======================================================
-  // FUNÇÃO PARA CALCULAR DISTÂNCIA ENTRE DOIS PONTOS
-  // ======================================================
-  // Utiliza uma fórmula simples para descobrir
-  // qual ponto está mais próximo do usuário.
-  const getDistance = (
-    lat1: number,
-    lon1: number,
-    lat2: number,
-    lon2: number
-  ) => {
-    return Math.sqrt(
-      Math.pow(lat2 - lat1, 2) +
-      Math.pow(lon2 - lon1, 2)
-    );
-  };
+  // Animação do menu lateral
+  useEffect(() => {
+    Animated.timing(slideAnim, {
+      toValue: isMenuOpen ? 0 : -width * 0.7,
+      duration: 300,
+      useNativeDriver: true,
+    }).start();
+  }, [isMenuOpen]);
 
-  // ======================================================
-  // OBTÉM A LOCALIZAÇÃO DO USUÁRIO
-  // ======================================================
   useEffect(() => {
     (async () => {
-
-      // Solicita permissão para acessar localização
-      let { status } =
-        await Location.requestForegroundPermissionsAsync();
-
-      // Se o usuário negar permissão
-      if (status !== 'granted') {
-        alert('Precisamos da sua localização!');
+      try {
+        let { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== 'granted') {
+          setError('Permissão negada.');
+          setLoading(false);
+          return;
+        }
+        let userLocation = await Location.getCurrentPositionAsync({});
+        setLocation({
+          latitude: userLocation.coords.latitude,
+          longitude: userLocation.coords.longitude,
+          latitudeDelta: 0.02,
+          longitudeDelta: 0.02,
+        });
         setLoading(false);
-        return;
+      } catch (err) {
+        setLoading(false);
       }
-
-      // Obtém localização atual
-      let userLocation =
-        await Location.getCurrentPositionAsync({});
-
-      // Define região inicial do mapa
-      const region = {
-        latitude: userLocation.coords.latitude,
-        longitude: userLocation.coords.longitude,
-        latitudeDelta: 0.015,
-        longitudeDelta: 0.015,
-      };
-
-      // Salva localização
-      setLocation(region);
-
-      // Finaliza loading
-      setLoading(false);
-
     })();
   }, []);
 
-  // ======================================================
-  // SEMPRE QUE A LOCALIZAÇÃO OU FILTRO MUDAR
-  // BUSCA NOVAMENTE OS ECOPONTOS
-  // ======================================================
-  useEffect(() => {
-
-    if (location) {
-
-      // Pequeno delay para evitar muitas chamadas seguidas
-      const delayDebounceFn = setTimeout(() => {
-        loadPoints();
-      }, 500);
-
-      // Limpa o timeout ao atualizar
-      return () => clearTimeout(delayDebounceFn);
-    }
-
-  }, [location, selectedWasteTypes]);
-
-  // ======================================================
-  // CARREGA ECOPONTOS DA API
-  // ======================================================
-  const loadPoints = async () => {
-
-    // Busca os pontos de reciclagem
-    const data = await fetchRecyclingPoints(
-      location.latitude,
-      location.longitude,
-      selectedWasteTypes
-    );
-
-    // Atualiza estado
-    setPoints(data);
-
-    // ==================================================
-    // ENCONTRA O ECOPONTO MAIS PRÓXIMO
-    // ==================================================
-    if (data.length > 0 && selectedWasteTypes.length > 0) {
-
-      // Assume inicialmente que o primeiro é o mais próximo
-      let nearest = data[0];
-
-      let minDistance = getDistance(
+  const loadPoints = useCallback(async () => {
+    if (!location) return;
+    try {
+      const data = await fetchRecyclingPoints(
         location.latitude,
         location.longitude,
-        data[0].lat,
-        data[0].lon
+        selectedWasteTypes
       );
-
-      // Percorre todos os pontos
-      data.forEach((p: any) => {
-
-        const d = getDistance(
-          location.latitude,
-          location.longitude,
-          p.lat,
-          p.lon
-        );
-
-        // Se encontrar um mais próximo
-        if (d < minDistance) {
-          minDistance = d;
-          nearest = p;
-        }
-      });
-
-      // ==================================================
-      // MOVE O MAPA PARA O PONTO MAIS PRÓXIMO
-      // ==================================================
-      mapRef.current?.animateToRegion(
-        {
+      setPoints(data);
+      if (data.length > 0 && selectedWasteTypes.length > 0) {
+        const nearest = data[0];
+        mapRef.current?.animateToRegion({
           latitude: nearest.lat,
           longitude: nearest.lon,
-          latitudeDelta: 0.005,
-          longitudeDelta: 0.005,
-        },
-        1000 // duração da animação
-      );
-
-      // Abre automaticamente o modal
-      setSelectedPoint(nearest);
+          latitudeDelta: 0.01,
+          longitudeDelta: 0.01,
+        }, 1000);
+      }
+    } catch (err) {
+      setError('Erro na conexão.');
     }
-  };
+  }, [location, selectedWasteTypes]);
 
-  // ======================================================
-  // SELECIONA OU REMOVE UM TIPO DE RESÍDUO
-  // ======================================================
+  useEffect(() => {
+    if (location) {
+      const timer = setTimeout(loadPoints, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [location, selectedWasteTypes, loadPoints]);
+
   const handleSelectType = (type: string) => {
-
     setSelectedWasteTypes(prev =>
-      prev.includes(type)
-        ? prev.filter(t => t !== type)
-        : [...prev, type]
+      prev.includes(type) ? prev.filter(t => t !== type) : [...prev, type]
     );
-
   };
 
-  // ======================================================
-  // ABRE O GOOGLE MAPS COM A ROTA
-  // ======================================================
-  const openGps = (
-    lat: number,
-    lon: number
-  ) => {
-
-    const url =
-      `https://www.google.com/maps/dir/?api=1&destination=${lat},${lon}`;
-
-    Linking.openURL(url);
-
-  };
-
-  // ======================================================
-  // TELA DE CARREGAMENTO
-  // ======================================================
   if (loading && !location) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator
-          size="large"
-          color="#4CAF50"
-        />
-
-        <Text style={{ marginTop: 10 }}>
-          Localizando...
-        </Text>
+        <ActivityIndicator size="large" color="#4CAF50" />
+        <Text style={styles.loadingText}>Carregando EcoMatch...</Text>
       </View>
     );
   }
 
-  // ======================================================
-  // INTERFACE PRINCIPAL
-  // ======================================================
   return (
     <View style={styles.container}>
+      {/* Botão para abrir o menu */}
+      <TouchableOpacity 
+        style={styles.menuButton} 
+        onPress={() => setIsMenuOpen(true)}
+      >
+        <Ionicons name="filter" size={24} color="white" />
+      </TouchableOpacity>
 
-      {/* Filtro de tipos de resíduos */}
-      <WasteTypeFilter
-        options={Object.keys(WASTE_TAGS)}
-        selectedTypes={selectedWasteTypes}
-        onSelect={handleSelectType}
-      />
-
-      {/* MAPA */}
       <MapView
         ref={mapRef}
         style={styles.map}
@@ -258,206 +134,179 @@ const MapScreen = () => {
         initialRegion={location}
         showsUserLocation={true}
       >
-
-        {/* MARCADORES DOS ECOPONTOS */}
         {points.map(point => (
           <Marker
             key={point.id}
-            coordinate={{
-              latitude: point.lat,
-              longitude: point.lon
-            }}
-
-            onPress={() =>
-              setSelectedPoint(point)
-            }
-
-            pinColor={
-              selectedPoint?.id === point.id
-                ? '#2E7D32'
-                : '#F44336'
-            }
-          />
+            coordinate={{ latitude: point.lat, longitude: point.lon }}
+            onPress={() => setSelectedPoint(point)}
+          >
+            <View style={[styles.customMarker, selectedPoint?.id === point.id && styles.selectedMarker]}>
+              <Ionicons name="leaf" size={20} color="white" />
+            </View>
+            <Callout tooltip onPress={() => setSelectedPoint(point)}>
+               <View style={styles.calloutContainer}>
+                  <Text style={styles.calloutTitle}>{point.name}</Text>
+                  <Text style={styles.calloutSubtitle}>Toque para detalhes</Text>
+               </View>
+            </Callout>
+          </Marker>
         ))}
-
       </MapView>
 
-      {/* ==================================================
-          MODAL COM INFORMAÇÕES DO ECOPONTO
-      ================================================== */}
+      {/* Overlay escuro quando o menu está aberto */}
+      {isMenuOpen && (
+        <TouchableOpacity 
+          style={styles.overlay} 
+          activeOpacity={1} 
+          onPress={() => setIsMenuOpen(false)} 
+        />
+      )}
+
+      {/* Menu Lateral Animado (Igual à Web) */}
+      <Animated.View style={[styles.sideMenu, { transform: [{ translateX: slideAnim }] }]}>
+        <View style={styles.menuHeader}>
+          <Text style={styles.menuTitle}>Filtros</Text>
+          <TouchableOpacity onPress={() => setIsMenuOpen(false)}>
+            <Ionicons name="close" size={28} color="#666" />
+          </TouchableOpacity>
+        </View>
+
+        <Text style={styles.menuSubtitle}>O que deseja descartar?</Text>
+
+        <ScrollView showsVerticalScrollIndicator={false}>
+          {Object.keys(WASTE_TAGS).map(type => {
+            const isSelected = selectedWasteTypes.includes(type);
+            const iconName = WASTE_ICONS[type] || 'leaf';
+            return (
+              <TouchableOpacity
+                key={type}
+                onPress={() => handleSelectType(type)}
+                style={[styles.chip, isSelected && styles.selectedChip]}
+              >
+                <Ionicons name={iconName} size={20} color={isSelected ? 'white' : '#4CAF50'} style={{ marginRight: 12 }} />
+                <Text style={[styles.chipText, isSelected && styles.selectedChipText]}>
+                  {type.charAt(0).toUpperCase() + type.slice(1)}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+
+        <View style={styles.menuFooter}>
+          <Text style={styles.footerText}>{points.length} locais encontrados</Text>
+        </View>
+      </Animated.View>
+
+      {/* Modal de Detalhes (Bottom Sheet) */}
       <Modal
         visible={!!selectedPoint}
         animationType="slide"
         transparent={true}
+        onRequestClose={() => setSelectedPoint(null)}
       >
-
         <View style={styles.modalOverlay}>
-
+          <TouchableOpacity style={styles.modalCloseArea} onPress={() => setSelectedPoint(null)} />
           <View style={styles.modalContent}>
-
-            <ScrollView
-              showsVerticalScrollIndicator={false}
-            >
-
-              {/* Nome */}
-              <Text style={styles.modalTitle}>
-                {selectedPoint?.name}
-              </Text>
-
-              {/* Endereço */}
-              <Text style={styles.infoText}>
-                📍 {selectedPoint?.address}
-              </Text>
-
-              {/* Horário */}
-              {selectedPoint?.opening_hours && (
-                <Text style={styles.infoText}>
-                  ⏰ {selectedPoint.opening_hours}
-                </Text>
-              )}
-
-              {/* Telefone */}
-              {selectedPoint?.phone && (
-                <Text style={styles.infoText}>
-                  📞 {selectedPoint.phone}
-                </Text>
-              )}
-
-              {/* Tipos aceitos */}
-              <Text style={styles.typesLabel}>
-                Aceita:
-              </Text>
-
-              <Text style={styles.typesList}>
-                {selectedPoint?.types?.join(', ') ||
-                  'Recicláveis'}
-              </Text>
-
-              {/* Botão GPS */}
-              <TouchableOpacity
-                style={styles.gpsButton}
-                onPress={() =>
-                  openGps(
-                    selectedPoint.lat,
-                    selectedPoint.lon
-                  )
-                }
-              >
-                <Text style={styles.gpsButtonText}>
-                  TRAÇAR ROTA NO GPS
-                </Text>
+            <View style={styles.modalIndicator} />
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>{selectedPoint?.name}</Text>
+                <TouchableOpacity onPress={() => setSelectedPoint(null)}>
+                  <Ionicons name="close-circle" size={28} color="#ccc" />
+                </TouchableOpacity>
+              </View>
+              <View style={styles.infoRow}><Ionicons name="location" size={20} color="#4CAF50" /><Text style={styles.infoText}>{selectedPoint?.address}</Text></View>
+              {selectedPoint?.opening_hours && (<View style={styles.infoRow}><Ionicons name="time" size={20} color="#4CAF50" /><Text style={styles.infoText}>{selectedPoint.opening_hours}</Text></View>)}
+              <Text style={styles.sectionTitle}>Materiais Aceitos</Text>
+              <View style={styles.tagContainer}>
+                {(selectedPoint?.types?.length > 0 ? selectedPoint.types : ['Recicláveis']).map((type: string, index: number) => (
+                  <View key={index} style={styles.tag}><Text style={styles.tagText}>{type.toUpperCase()}</Text></View>
+                ))}
+              </View>
+              <TouchableOpacity style={styles.gpsButton} onPress={() => Linking.openURL(`geo:0,0?q=${selectedPoint.lat},${selectedPoint.lon}`)}>
+                <Ionicons name="navigate" size={20} color="white" style={{marginRight: 8}} />
+                <Text style={styles.gpsButtonText}>COMO CHEGAR</Text>
               </TouchableOpacity>
-
-              {/* Botão fechar */}
-              <TouchableOpacity
-                style={styles.closeButton}
-                onPress={() =>
-                  setSelectedPoint(null)
-                }
-              >
-                <Text style={styles.closeButtonText}>
-                  FECHAR
-                </Text>
-              </TouchableOpacity>
-
             </ScrollView>
-
           </View>
-
         </View>
-
       </Modal>
-
     </View>
   );
 };
 
-// ======================================================
-// ESTILOS
-// ======================================================
 const styles = StyleSheet.create({
-
-  container: {
-    flex: 1
-  },
-
-  center: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center'
-  },
-
-  map: {
-    width: Dimensions.get('window').width,
-    height: Dimensions.get('window').height
-  },
-
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    justifyContent: 'flex-end'
-  },
-
-  modalContent: {
-    backgroundColor: 'white',
-    borderTopLeftRadius: 25,
-    borderTopRightRadius: 25,
-    padding: 25,
-    minHeight: 350
-  },
-
-  modalTitle: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: '#2E7D32',
-    marginBottom: 15
-  },
-
-  infoText: {
-    fontSize: 16,
-    color: '#444',
-    marginBottom: 10
-  },
-
-  typesLabel: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#666',
-    marginTop: 15
-  },
-
-  typesList: {
-    fontSize: 15,
-    color: '#4CAF50',
-    fontWeight: '600',
-    marginTop: 5
-  },
-
-  gpsButton: {
+  container: { flex: 1 },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  loadingText: { marginTop: 10, color: '#666' },
+  map: { width, height },
+  menuButton: {
+    position: 'absolute',
+    top: Platform.OS === 'ios' ? 50 : 30,
+    left: 20,
+    zIndex: 10,
     backgroundColor: '#4CAF50',
-    padding: 16,
+    padding: 12,
+    borderRadius: 15,
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowRadius: 5,
+  },
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    zIndex: 20,
+  },
+  sideMenu: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    left: 0,
+    width: width * 0.45,
+    backgroundColor: 'white',
+    zIndex: 30,
+    padding: 20,
+    paddingTop: Platform.OS === 'ios' ? 60 : 40,
+    elevation: 10,
+  },
+  menuHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 25 },
+  menuTitle: { fontSize: 24, fontWeight: 'bold', color: '#2E7D32' },
+  menuSubtitle: { fontSize: 14, color: '#666', marginBottom: 20 },
+  chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f8f8f8',
+    padding: 15,
     borderRadius: 12,
-    marginTop: 25,
-    alignItems: 'center'
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: 'transparent',
   },
-
-  gpsButtonText: {
-    color: 'white',
-    fontWeight: 'bold',
-    fontSize: 16
-  },
-
-  closeButton: {
-    marginTop: 15,
-    padding: 10,
-    alignItems: 'center'
-  },
-
-  closeButtonText: {
-    color: '#999',
-    fontWeight: 'bold'
-  }
+  selectedChip: { backgroundColor: '#E8F5E9', borderColor: '#4CAF50' },
+  chipText: { fontSize: 15, color: '#555', fontWeight: '500' },
+  selectedChipText: { color: '#2E7D32', fontWeight: 'bold' },
+  menuFooter: { marginTop: 20, paddingTop: 20, borderTopWidth: 1, borderTopColor: '#eee' },
+  footerText: { color: '#999', fontSize: 12, textAlign: 'center' },
+  customMarker: { backgroundColor: '#4CAF50', padding: 8, borderRadius: 20, borderWidth: 2, borderColor: 'white' },
+  selectedMarker: { backgroundColor: '#2E7D32', transform: [{ scale: 1.2 }] },
+  calloutContainer: { backgroundColor: 'white', padding: 10, borderRadius: 10, width: 140, alignItems: 'center' },
+  calloutTitle: { fontWeight: 'bold', fontSize: 12, textAlign: 'center' },
+  calloutSubtitle: { fontSize: 10, color: '#4CAF50' },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.3)', justifyContent: 'flex-end' },
+  modalCloseArea: { flex: 1 },
+  modalContent: { backgroundColor: 'white', borderTopLeftRadius: 30, borderTopRightRadius: 30, padding: 20, maxHeight: height * 0.6 },
+  modalIndicator: { width: 40, height: 5, backgroundColor: '#eee', borderRadius: 3, alignSelf: 'center', marginBottom: 15 },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 20 },
+  modalTitle: { fontSize: 22, fontWeight: 'bold', color: '#2E7D32', flex: 1 },
+  infoRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
+  infoText: { fontSize: 15, color: '#444', marginLeft: 10, flex: 1 },
+  sectionTitle: { fontSize: 16, fontWeight: 'bold', color: '#333', marginTop: 15, marginBottom: 10 },
+  tagContainer: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: 20 },
+  tag: { backgroundColor: '#E8F5E9', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, marginRight: 8, marginBottom: 8 },
+  tagText: { fontSize: 11, color: '#2E7D32', fontWeight: 'bold' },
+  gpsButton: { backgroundColor: '#4CAF50', flexDirection: 'row', padding: 16, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
+  gpsButtonText: { color: 'white', fontWeight: 'bold', fontSize: 16 }
 });
 
-// Exporta a tela para uso no app
 export default MapScreen;
