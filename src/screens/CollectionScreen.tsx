@@ -1,246 +1,342 @@
-// ============================================================
+// ============================================================================
 // CollectionScreen.tsx
-// Tela de acervo educativo sobre reciclagem e descarte correto
-// Exibe cards informativos por tipo de material e uma dica
-// sustentável ao final da lista
-// ============================================================
+// Tela de acervo educativo sobre reciclagem com cards expansíveis.
+// ============================================================================
 
-import React from 'react';
-
+import React, { useState } from 'react';
 import {
   ScrollView,
   View,
   Text,
   StyleSheet,
+  TouchableOpacity,
+  SafeAreaView,
+  StatusBar,
+  LayoutAnimation,
+  Platform,
+  UIManager,
 } from 'react-native';
 
-// -------------------------------------------------------
-// Tipagem de cada item de material reciclável
-// -------------------------------------------------------
-interface Material {
-  id: number;
-  icon: string;
-  title: string;
-  color: string;
-  description: string;
+// Habilita animações de layout no Android
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
-// -------------------------------------------------------
-// Componente principal da tela de acervo ambiental
-// -------------------------------------------------------
-export default function CollectionScreen() {
+// ----------------------------------------------------------------------------
+// Tipagem dos Materiais
+// ----------------------------------------------------------------------------
+interface MaterialDetail {
+  id: number;
+  emoji: string;
+  title: string;
+  color: string;
+  summary: string;
+  fullGuide: string[];
+  curiosity: string;
+}
 
-  // Lista estática dos materiais recicláveis com seus dados
-  // Cada item possui cor de fundo própria para diferenciação visual
-  const materials: Material[] = [
+// ----------------------------------------------------------------------------
+// Componente Principal
+// ----------------------------------------------------------------------------
+export default function CollectionScreen() {
+  // Estado para controlar qual card está expandido
+  const [expandedId, setExpandedId] = useState<number | null>(null);
+
+  const materials: MaterialDetail[] = [
     {
       id: 1,
-      icon: '📄',
-      title: 'Papel',
-      color: '#BBDEFB', // azul claro
-      description:
-        'Jornais, revistas, caixas de papelão e folhas podem ser reciclados. Evite papel molhado ou engordurado.',
+      emoji: '📄',
+      title: 'Papéis',
+      color: '#3498DB',
+      summary: 'Cadernos, jornais e caixas.',
+      fullGuide: ['Remova espirais de plástico', 'Não recicle papel higiênico', 'Pique o papel para ocupar menos espaço'],
+      curiosity: 'Reciclar 1 tonelada de papel poupa 20 árvores.',
     },
     {
       id: 2,
-      icon: '🧴',
-      title: 'Plástico',
-      color: '#FFCDD2', // vermelho claro
-      description:
-        'Garrafas PET, embalagens e recipientes plásticos devem estar limpos antes do descarte.',
+      emoji: '🧴',
+      title: 'Plásticos',
+      color: '#E74C3C',
+      summary: 'Garrafas, potes e sacolas.',
+      fullGuide: ['Lave com água de reuso', 'Separe por tipo (PET, PEAD)', 'Retire rótulos adesivos'],
+      curiosity: 'O plástico leva 450 anos para se decompor.',
     },
     {
       id: 3,
-      icon: '🍾',
-      title: 'Vidro',
-      color: '#C8E6C9', // verde claro
-      description:
-        'Garrafas e potes de vidro podem ser reciclados. Tome cuidado com materiais quebrados.',
+      emoji: '🍾',
+      title: 'Vidros',
+      color: '#27AE60',
+      summary: 'Garrafas e potes de conserva.',
+      fullGuide: ['Lave e retire as tampas', 'Cuidado com cacos', 'Não misture com cerâmica'],
+      curiosity: 'O vidro é infinitamente reciclável.',
     },
     {
       id: 4,
-      icon: '🥫',
-      title: 'Metal',
-      color: '#FFF9C4', // amarelo claro
-      description:
-        'Latas de alumínio e aço possuem alto valor de reciclagem e ajudam a reduzir impactos ambientais.',
-    },
-    {
-      id: 5,
-      icon: '💻',
-      title: 'Eletrônicos',
-      color: '#D1C4E9', // roxo claro
-      description:
-        'Celulares, computadores e baterias devem ser descartados em pontos especializados.',
-    },
-    {
-      id: 6,
-      icon: '🛢️',
-      title: 'Óleo de Cozinha',
-      color: '#FFE0B2', // laranja claro
-      description:
-        'Nunca descarte óleo na pia. Armazene em garrafas e entregue em um EcoPonto.',
+      emoji: '🥫',
+      title: 'Metais',
+      color: '#F1C40F',
+      summary: 'Latas de alumínio e aço.',
+      fullGuide: ['Lave para evitar odores', 'Dobre a tampa para dentro', 'Não amasse latas de spray'],
+      curiosity: 'Latas voltam à prateleira em 60 dias.',
     },
   ];
 
-  // -------------------------------------------------------
-  // Renderização principal: título + cards de materiais + dica
-  // -------------------------------------------------------
+  // Função para alternar a expansão do card com animação
+  const toggleExpand = (id: number) => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setExpandedId(expandedId === id ? null : id);
+  };
+
   return (
-
-    <ScrollView
-      style={styles.container}
-      showsVerticalScrollIndicator={false}
-      contentContainerStyle={{ paddingBottom: 140 }}
-    >
-
-      <Text style={styles.title}>
-        📚 Acervo Ambiental
-      </Text>
-
-      <Text style={styles.subtitle}>
-        Aprenda a reciclar corretamente e ajude o planeta.
-      </Text>
-
-      {/*
-        .map() percorre o array de materiais e renderiza
-        um card para cada item. A prop key é obrigatória
-        para o React identificar cada elemento da lista.
-      */}
-      {materials.map((item) => (
-
-        <View
-          key={item.id}
-          style={[
-            styles.card,
-            { backgroundColor: item.color }, // cor dinâmica por material
-          ]}
-        >
-
-          {/* Ícone representativo do tipo de material */}
-          <Text style={styles.icon}>
-            {item.icon}
-          </Text>
-
-          {/* Nome do material reciclável */}
-          <Text style={styles.cardTitle}>
-            {item.title}
-          </Text>
-
-          {/* Descrição com instruções de descarte correto */}
-          <Text style={styles.cardDescription}>
-            {item.description}
-          </Text>
-
+    <SafeAreaView style={styles.safeArea}>
+      <StatusBar barStyle="dark-content" />
+      
+      <ScrollView 
+        style={styles.container}
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Header Estilo Dashboard */}
+        <View style={styles.header}>
+          <View>
+            <Text style={styles.welcomeText}>Guia Interativo</Text>
+            <Text style={styles.title}>Reciclagem Inteligente</Text>
+          </View>
+          <View style={styles.progressBadge}>
+            <Text style={styles.progressText}>🌱 Ativo</Text>
+          </View>
         </View>
 
-      ))}
+        {/* Cards de Material */}
+        <View style={styles.grid}>
+          {materials.map((item) => {
+            const isExpanded = expandedId === item.id;
+            return (
+              <TouchableOpacity
+                key={item.id}
+                activeOpacity={0.9}
+                onPress={() => toggleExpand(item.id)}
+                style={[
+                  styles.card,
+                  isExpanded && styles.cardExpanded,
+                  { borderColor: isExpanded ? item.color : '#F0F0F0' }
+                ]}
+              >
+                <View style={styles.cardHeader}>
+                  <View style={[styles.iconCircle, { backgroundColor: item.color + '15' }]}>
+                    <Text style={styles.emoji}>{item.emoji}</Text>
+                  </View>
+                  <View style={styles.headerInfo}>
+                    <Text style={styles.cardTitle}>{item.title}</Text>
+                    {!isExpanded && <Text style={styles.cardSummary}>{item.summary}</Text>}
+                  </View>
+                  <Text style={[styles.arrow, { color: item.color }]}>
+                    {isExpanded ? '▲' : '▼'}
+                  </Text>
+                </View>
 
-      {/* Card de dica sustentável exibido ao final da lista */}
-      <View style={styles.tipCard}>
+                {isExpanded && (
+                  <View style={styles.expandedContent}>
+                    <View style={styles.divider} />
+                    
+                    <Text style={styles.sectionLabel}>PASSO A PASSO:</Text>
+                    {item.fullGuide.map((step, idx) => (
+                      <View key={idx} style={styles.stepRow}>
+                        <View style={[styles.stepNumber, { backgroundColor: item.color }]}>
+                          <Text style={styles.stepNumberText}>{idx + 1}</Text>
+                        </View>
+                        <Text style={styles.stepText}>{step}</Text>
+                      </View>
+                    ))}
 
-        <Text style={styles.tipTitle}>
-          🌱 Dica Sustentável
-        </Text>
+                    <View style={[styles.curiosityBox, { backgroundColor: item.color + '10' }]}>
+                      <Text style={[styles.curiosityTitle, { color: item.color }]}>Você sabia?</Text>
+                      <Text style={styles.curiosityText}>{item.curiosity}</Text>
+                    </View>
+                  </View>
+                )}
+              </TouchableOpacity>
+            );
+          })}
+        </View>
 
-        <Text style={styles.tipText}>
-          Pequenas atitudes diárias fazem grande diferença.
-          Separar corretamente os resíduos ajuda a preservar
-          recursos naturais e reduz a poluição.
-        </Text>
+        {/* Dica do Dia */}
+        <View style={styles.tipOfTheDay}>
+          <Text style={styles.tipTitle}>💡 Dica de Hoje</Text>
+          <Text style={styles.tipDescription}>
+            Separe o lixo orgânico do reciclável. O orgânico pode virar adubo através da compostagem doméstica!
+          </Text>
+        </View>
 
-      </View>
-
-    </ScrollView>
-
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
-// ============================================================
-// Estilos do componente utilizando StyleSheet do React Native
-// ============================================================
+// ----------------------------------------------------------------------------
+// Estilos
+// ----------------------------------------------------------------------------
 const styles = StyleSheet.create({
-
-  // Container principal com scroll vertical
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#ffffff',
+  },
   container: {
     flex: 1,
-    backgroundColor: '#F4FFF6',
+  },
+  content: {
     padding: 20,
   },
-
-  // Título principal da tela
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 10,
+    marginBottom: 30,
+  },
+  welcomeText: {
+    fontSize: 14,
+    color: '#888',
+    fontWeight: '600',
+  },
   title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#2E7D32',
-    marginTop: 20,
+    fontSize: 26,
+    fontWeight: '800',
+    color: '#1A1A1A',
   },
-
-  // Subtítulo descritivo abaixo do título
-  subtitle: {
-    color: '#757575',
-    fontSize: 15,
-    marginTop: 10,
-    marginBottom: 25,
-  },
-
-  // Card de cada material — cor de fundo aplicada dinamicamente
-  card: {
-    borderRadius: 18,
-    padding: 20,
-    marginBottom: 16,
-
-    // Sombra para iOS
-    shadowColor: '#000',
-    shadowOpacity: 0.08,
-    shadowRadius: 10,
-
-    // Sombra para Android
-    elevation: 3,
-  },
-
-  // Ícone emoji do material
-  icon: {
-    fontSize: 36,
-    marginBottom: 10,
-  },
-
-  // Título do card (nome do material)
-  cardTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#2E7D32',
-    marginBottom: 10,
-  },
-
-  // Texto descritivo com orientações de descarte
-  cardDescription: {
-    fontSize: 15,
-    color: '#2E7D32',
-    lineHeight: 22, // Espaçamento entre linhas para melhor legibilidade
-  },
-
-  // Card de dica sustentável com fundo verde suave
-  tipCard: {
+  progressBadge: {
     backgroundColor: '#E8F5E9',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
     borderRadius: 20,
-    padding: 20,
-    marginTop: 10,
-    marginBottom: 40,
   },
-
-  // Título da dica sustentável
-  tipTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
+  progressText: {
     color: '#2E7D32',
+    fontWeight: '700',
+    fontSize: 12,
+  },
+  grid: {
+    gap: 16,
+  },
+  card: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    padding: 16,
+    borderWidth: 2,
+    borderColor: '#F5F5F5',
+    // Sombra leve
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    elevation: 2,
+  },
+  cardExpanded: {
+    backgroundColor: '#FFFFFF',
+    shadowOpacity: 0.1,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  iconCircle: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 15,
+  },
+  emoji: {
+    fontSize: 24,
+  },
+  headerInfo: {
+    flex: 1,
+  },
+  cardTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1A1A1A',
+  },
+  cardSummary: {
+    fontSize: 13,
+    color: '#666',
+    marginTop: 2,
+  },
+  arrow: {
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  expandedContent: {
+    marginTop: 15,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: '#F0F0F0',
+    marginBottom: 15,
+  },
+  sectionLabel: {
+    fontSize: 11,
+    fontWeight: '900',
+    color: '#999',
+    letterSpacing: 1,
+    marginBottom: 12,
+  },
+  stepRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
     marginBottom: 10,
   },
-
-  // Texto da dica sustentável
-  tipText: {
-    color: '#2E7D32',
-    lineHeight: 22,
+  stepNumber: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
   },
-
+  stepNumberText: {
+    color: '#FFF',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  stepText: {
+    flex: 1,
+    fontSize: 14,
+    color: '#444',
+  },
+  curiosityBox: {
+    marginTop: 15,
+    padding: 15,
+    borderRadius: 16,
+  },
+  curiosityTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  curiosityText: {
+    fontSize: 13,
+    color: '#555',
+    lineHeight: 18,
+  },
+  tipOfTheDay: {
+    marginTop: 30,
+    backgroundColor: '#FDF7E2',
+    padding: 20,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: '#F9E79F',
+  },
+  tipTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#7D6608',
+    marginBottom: 8,
+  },
+  tipDescription: {
+    fontSize: 14,
+    color: '#9A7D0A',
+    lineHeight: 20,
+  },
 });

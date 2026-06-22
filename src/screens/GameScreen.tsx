@@ -1,463 +1,279 @@
-// ============================================================
-// GameScreen.tsx
-// Tela do mini-jogo "Eco Caminho"
-// O jogador deve classificar resíduos na lixeira correta.
-// Acerta 10 vezes para vencer | Erra 5 vezes para perder
-// Vitória concede +500 EcoScore e +200 XP no Firestore
-// ============================================================
+// ============================================================================
+// GameScreen.tsx (Versão: Simulador de Triagem Pro)
+// Jogo desafiador focado em decisões críticas de descarte.
+// Desafio: Reciclável vs Rejeito vs Especial (Ecoponto).
+// Design: Fundo Branco, Estilo Minimalista Industrial, UX de Alta Performance.
+// ============================================================================
 
-import React, { useState } from 'react';
-
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
-  Alert,
-  ScrollView,
+  SafeAreaView,
+  StatusBar,
+  Animated,
+  Dimensions,
 } from 'react-native';
 
-// Importa autenticação e banco de dados configurados no projeto
+// Firebase
 import { auth, db } from '../services/firebaseConfig';
+import { doc, updateDoc, increment } from 'firebase/firestore';
 
-import {
-  doc,
-  updateDoc,
-  increment,
-} from 'firebase/firestore';
+const { width } = Dimensions.get('window');
 
-// -------------------------------------------------------
-// Tipagem de cada item do jogo
-// -------------------------------------------------------
-interface GameItem {
-  item: string;    // Descrição do resíduo com emoji
-  correct: string; // Cor da lixeira correta para esse resíduo
+// ----------------------------------------------------------------------------
+// Tipagem e Dados Desafiadores
+// ----------------------------------------------------------------------------
+type Destino = 'RECICLÁVEL' | 'REJEITO' | 'ECOPONTO';
+
+interface Residuo {
+  id: number;
+  nome: string;
+  emoji: string;
+  condicao: string;
+  destinoCorreto: Destino;
+  explicacao: string;
 }
 
-// -------------------------------------------------------
-// Tipagem das props de navegação recebidas pelo componente
-// -------------------------------------------------------
-interface GameScreenProps {
-  navigation: any;
-}
+const LISTA_RESIDUOS: Residuo[] = [
+  { id: 1, emoji: '🍕', nome: 'Caixa de Pizza', condicao: 'Com restos de gordura', destinoCorreto: 'REJEITO', explicacao: 'Papel engordurado não pode ser reciclado.' },
+  { id: 2, emoji: '📦', nome: 'Caixa de Papelão', condicao: 'Limpa e dobrada', destinoCorreto: 'RECICLÁVEL', explicacao: 'Papel limpo é excelente para reciclagem.' },
+  { id: 3, emoji: '🔋', nome: 'Pilha Usada', condicao: 'Descarregada', destinoCorreto: 'ECOPONTO', explicacao: 'Contém metais pesados. Exige descarte especial.' },
+  { id: 4, emoji: '🧴', nome: 'Frasco de Shampoo', condicao: 'Enxaguado', destinoCorreto: 'RECICLÁVEL', explicacao: 'Plásticos limpos são recicláveis.' },
+  { id: 5, emoji: '🧻', nome: 'Papel Higiênico', condicao: 'Usado', destinoCorreto: 'REJEITO', explicacao: 'Papéis sanitários vão para o lixo comum.' },
+  { id: 6, emoji: '💻', nome: 'Mouse Quebrado', condicao: 'Eletrônico', destinoCorreto: 'ECOPONTO', explicacao: 'Lixo eletrônico deve ir para pontos específicos.' },
+  { id: 7, emoji: '🍷', nome: 'Taça Quebrada', condicao: 'Cacos de vidro', destinoCorreto: 'RECICLÁVEL', explicacao: 'Vidro quebrado é reciclável, mas deve ser embalado.' },
+  { id: 8, emoji: '☕', nome: 'Copo Descartável', condicao: 'Com resto de café', destinoCorreto: 'REJEITO', explicacao: 'A sujeira orgânica inviabiliza a reciclagem rápida.' },
+  { id: 9, emoji: '🩹', nome: 'Curativo (Band-aid)', condicao: 'Usado', destinoCorreto: 'REJEITO', explicacao: 'Materiais contaminados são rejeitos.' },
+  { id: 10, emoji: '🛢️', nome: 'Óleo de Cozinha', condicao: 'Na garrafa PET', destinoCorreto: 'ECOPONTO', explicacao: 'Óleo nunca vai no ralo ou lixo comum.' },
+];
 
-// -------------------------------------------------------
-// Componente principal do mini-jogo Eco Caminho
-// -------------------------------------------------------
-export default function GameScreen({ navigation }: GameScreenProps) {
-
-  // Lista de itens do jogo com o resíduo e sua lixeira correta
-  // Baseada na separação seletiva padrão brasileira de cores
-  const items: GameItem[] = [
-    { item: '🧴 Garrafa PET',          correct: 'Vermelha' },
-    { item: '📄 Jornal',               correct: 'Azul'     },
-    { item: '🥫 Lata de Alumínio',     correct: 'Amarela'  },
-    { item: '🍾 Garrafa de Vidro',     correct: 'Verde'    },
-    { item: '🧴 Embalagem Plástica',   correct: 'Vermelha' },
-    { item: '📦 Caixa de Papelão',     correct: 'Azul'     },
-    { item: '🥫 Lata de Refrigerante', correct: 'Amarela'  },
-    { item: '🍷 Pote de Vidro',        correct: 'Verde'    },
-  ];
-
-  // Função auxiliar que retorna um item aleatório da lista
-  function getRandomItem(): GameItem {
-    return items[Math.floor(Math.random() * items.length)];
-  }
-
-  // Estado que armazena o item sendo exibido ao jogador no momento
-  const [currentItem, setCurrentItem] = useState<GameItem>(getRandomItem);
-
-  // Estado com a pontuação atual — meta: atingir 10 pontos para vencer
+export default function GameScreen({ navigation }: { navigation: any }) {
   const [score, setScore] = useState(0);
+  const [vidas, setVidas] = useState(3);
+  const [itemAtual, setItemAtual] = useState<Residuo>(LISTA_RESIDUOS[0]);
+  const [feedback, setFeedback] = useState<{ tipo: 'certo' | 'errado' | 'none', msg: string }>({ tipo: 'none', msg: '' });
+  const [gameActive, setGameActive] = useState(true);
 
-  // Estado com o número de erros — limite: 5 erros encerram o jogo
-  const [errors, setErrors] = useState(0);
+  // Animações
+  const fadeAnim = useRef(new Animated.Value(1)).current;
+  const slideAnim = useRef(new Animated.Value(0)).current;
 
-  // Flags de controle do estado de fim de jogo
-  const [gameOverLose, setGameOverLose] = useState(false);
-  const [gameOverWin, setGameOverWin] = useState(false);
+  // Função para sortear próximo item sem repetir o atual
+  const sortearProximo = () => {
+    let novo;
+    do {
+      novo = LISTA_RESIDUOS[Math.floor(Math.random() * LISTA_RESIDUOS.length)];
+    } while (novo.id === itemAtual.id);
+    
+    // Animação de entrada
+    slideAnim.setValue(width);
+    setItemAtual(novo);
+    Animated.spring(slideAnim, { toValue: 0, useNativeDriver: true, tension: 50 }).start();
+  };
 
-  // Corações restantes calculados a partir dos erros acumulados
-  const hearts = 5 - errors;
+  const handleDecisao = async (destino: Destino) => {
+    if (!gameActive || feedback.tipo !== 'none') return;
 
-  // -------------------------------------------------------
-  // Reinicia todos os estados para uma nova partida
-  // -------------------------------------------------------
-  function resetGame() {
-    setScore(0);
-    setErrors(0);
-    setGameOverLose(false);
-    setGameOverWin(false);
-    setCurrentItem(getRandomItem());
-  }
-
-  // -------------------------------------------------------
-  // Sorteia um novo item aleatório para a próxima rodada
-  // -------------------------------------------------------
-  function nextItem() {
-    setCurrentItem(getRandomItem());
-  }
-
-  // -------------------------------------------------------
-  // Chamada quando o jogador vence (10 acertos)
-  // Concede recompensas no Firestore e exibe alerta de vitória
-  // -------------------------------------------------------
-  async function finishGameWin() {
-    try {
-
-      const uid = auth.currentUser?.uid;
-
-      if (uid) {
-        // increment() do Firestore soma o valor ao campo existente
-        // sem precisar buscar o valor atual antes de atualizar
-        await updateDoc(doc(db, 'users', uid), {
-          ecoScore: increment(500),
-          xp: increment(200),
-        });
+    if (destino === itemAtual.destinoCorreto) {
+      // ACERTO
+      setScore(s => s + 1);
+      setFeedback({ tipo: 'certo', msg: 'Excelente! ' + itemAtual.explicacao });
+      
+      if (score + 1 >= 15) {
+        await finalizarJogo(true);
+      } else {
+        setTimeout(() => {
+          setFeedback({ tipo: 'none', msg: '' });
+          sortearProximo();
+        }, 2000);
       }
-
-      setGameOverWin(true);
-
-      // Alerta de vitória com as recompensas recebidas
-      Alert.alert(
-        '🎆 PARABÉNS 🎆',
-        'Você venceu o Eco Caminho!\n\n+500 EcoScore\n+200 XP\n\n🏆 ECO GUARDIÃO',
-        [
-          {
-            text: 'Jogar Novamente',
-            onPress: resetGame,
-          },
-        ]
-      );
-
-    } catch (error) {
-      console.log('Erro ao salvar vitória:', error);
-    }
-  }
-
-  // -------------------------------------------------------
-  // Chamada quando o jogador perde (5 erros)
-  // -------------------------------------------------------
-  function finishGameLose() {
-    setGameOverLose(true);
-  }
-
-  // -------------------------------------------------------
-  // Processa a escolha do jogador ao tocar em uma lixeira
-  // Verifica acerto ou erro e decide o próximo estado do jogo
-  // -------------------------------------------------------
-  function choose(color: string) {
-
-    // Ignora toques se o jogo já terminou
-    if (gameOverLose || gameOverWin) return;
-
-    if (color === currentItem.correct) {
-
-      // Acerto: incrementa pontuação
-      const newScore = score + 1;
-      console.log('Pontuação:', newScore);
-      setScore(newScore);
-
-      // Verifica se atingiu a meta de vitória
-      if (newScore >= 10) {
-        finishGameWin();
-        return;
-      }
-
     } else {
+      // ERRO
+      const novasVidas = vidas - 1;
+      setVidas(novasVidas);
+      setFeedback({ tipo: 'errado', msg: 'Ops! ' + itemAtual.explicacao });
 
-      // Erro: incrementa contador de erros
-      const newErrors = errors + 1;
-      setErrors(newErrors);
-
-      // Verifica se atingiu o limite de erros
-      if (newErrors >= 5) {
-        finishGameLose();
-        return;
+      if (novasVidas <= 0) {
+        setGameActive(false);
+        setTimeout(() => setFeedback({ tipo: 'none', msg: '' }), 2000);
+      } else {
+        setTimeout(() => {
+          setFeedback({ tipo: 'none', msg: '' });
+          sortearProximo();
+        }, 2500);
       }
     }
+  };
 
-    // Avança para o próximo item independente de acerto ou erro
-    nextItem();
-  }
+  const finalizarJogo = async (vitoria: boolean) => {
+    setGameActive(false);
+    if (vitoria) {
+      try {
+        const uid = auth.currentUser?.uid;
+        if (uid) {
+          await updateDoc(doc(db, 'users', uid), {
+            ecoScore: increment(800),
+            xp: increment(300),
+          });
+        }
+      } catch (e) { console.error(e); }
+    }
+  };
 
-  // -------------------------------------------------------
-  // Tela de derrota — exibida quando o jogador erra 5 vezes
-  // -------------------------------------------------------
-  if (gameOverLose) {
+  const reiniciar = () => {
+    setScore(0);
+    setVidas(3);
+    setFeedback({ tipo: 'none', msg: '' });
+    setGameActive(true);
+    sortearProximo();
+  };
+
+  // --------------------------------------------------------------------------
+  // Renderização de Fim de Jogo
+  // --------------------------------------------------------------------------
+  if (!gameActive && feedback.tipo === 'none') {
+    const venceu = score >= 15;
     return (
-
-      <View style={styles.endContainer}>
-
-        <Text style={styles.endTitle}>
-          💀 Você perdeu!
-        </Text>
-
-        <Text style={styles.endSubtitle}>
-          Você errou muitas vezes, mas pode tentar novamente!
-        </Text>
-
-        {/* Botão para reiniciar o jogo sem sair da tela */}
-        <TouchableOpacity
-          style={styles.retryButton}
-          onPress={resetGame}
-        >
-          <Text style={styles.retryText}>
-            🔁 Tentar novamente
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.endScreen}>
+          <Text style={styles.endEmoji}>{venceu ? '🏆' : '♻️'}</Text>
+          <Text style={styles.endTitle}>{venceu ? 'Mestre da Triagem' : 'Fim da Simulação'}</Text>
+          <Text style={styles.endText}>
+            {venceu 
+              ? 'Você demonstrou conhecimento avançado em descarte correto!' 
+              : `Você classificou ${score} itens corretamente. Continue praticando!`}
           </Text>
-        </TouchableOpacity>
-
-        {/* Botão para retornar à tela anterior */}
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Text style={styles.backText}>← Voltar</Text>
-        </TouchableOpacity>
-
-      </View>
-
+          <View style={styles.finalScoreCard}>
+            <Text style={styles.finalScoreVal}>{score}</Text>
+            <Text style={styles.finalScoreLab}>Pontos</Text>
+          </View>
+          <TouchableOpacity style={styles.btnPrimary} onPress={reiniciar}>
+            <Text style={styles.btnPrimaryText}>Reiniciar Simulação</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.btnSecondary} onPress={() => navigation.goBack()}>
+            <Text style={styles.btnSecondaryText}>Sair</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
     );
   }
 
-  // -------------------------------------------------------
-  // Tela principal do jogo — exibida enquanto a partida ocorre
-  // -------------------------------------------------------
   return (
-
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={{ paddingBottom: 120 }}
-    >
-
-      {/* Botão de voltar para a tela anterior */}
-      <TouchableOpacity
-        style={styles.backButton}
-        onPress={() => navigation.goBack()}
-      >
-        <Text style={styles.backText}>← Voltar</Text>
-      </TouchableOpacity>
-
-      <Text style={styles.title}>🚶 Eco Caminho</Text>
-
-      <Text style={styles.subtitle}>
-        Leve cada resíduo para a lixeira correta.
-      </Text>
-
-      {/* Card de progresso: placar visual + pontuação + corações */}
-      <View style={styles.progressCard}>
-
-        <Text style={styles.progressText}>
-          🏠 -------- 🚶 -------- ♻️
-        </Text>
-
-        <Text style={styles.score}>
-          Pontos: {score}/10
-        </Text>
-
-        {/*
-          Exibe corações cheios (❤️) para vidas restantes
-          e corações vazios (🤍) para erros cometidos
-        */}
-        <Text style={styles.lives}>
-          {'❤️'.repeat(hearts)}
-          {'🤍'.repeat(errors)}
-        </Text>
-
+    <SafeAreaView style={styles.safeArea}>
+      <StatusBar barStyle="dark-content" />
+      
+      {/* Header Info */}
+      <View style={styles.header}>
+        <View>
+          <Text style={styles.headerLabel}>PONTUAÇÃO</Text>
+          <Text style={styles.headerVal}>{score}</Text>
+        </View>
+        <View style={styles.vidasContainer}>
+          {[...Array(3)].map((_, i) => (
+            <Text key={i} style={styles.vidaEmoji}>{i < vidas ? '⚡' : '🔘'}</Text>
+          ))}
+        </View>
       </View>
 
-      {/* Card com o resíduo que o jogador deve classificar */}
-      <View style={styles.card}>
+      <View style={styles.main}>
+        {/* Item na Esteira */}
+        <Animated.View style={[styles.itemCard, { transform: [{ translateX: slideAnim }] }]}>
+          <View style={styles.emojiCircle}>
+            <Text style={styles.itemEmoji}>{itemAtual.emoji}</Text>
+          </View>
+          <Text style={styles.itemName}>{itemAtual.nome}</Text>
+          <View style={styles.condicaoBadge}>
+            <Text style={styles.condicaoText}>{itemAtual.condicao.toUpperCase()}</Text>
+          </View>
+        </Animated.View>
 
-        <Text style={styles.question}>
-          Qual a lixeira correta para:
-        </Text>
+        {/* Feedback Overlay */}
+        {feedback.tipo !== 'none' && (
+          <View style={[styles.feedbackOverlay, { backgroundColor: feedback.tipo === 'certo' ? '#F1F9F4' : '#FFF5F5' }]}>
+            <Text style={[styles.feedbackTitle, { color: feedback.tipo === 'certo' ? '#27AE60' : '#EB5757' }]}>
+              {feedback.tipo === 'certo' ? '✓ CORRETO' : '✕ INCORRETO'}
+            </Text>
+            <Text style={styles.feedbackMsg}>{feedback.msg}</Text>
+          </View>
+        )}
 
-        <Text style={styles.item}>
-          {currentItem.item}
-        </Text>
-
+        {/* Controles de Decisão */}
+        <View style={styles.controles}>
+          <Text style={styles.controlesLabel}>PARA ONDE VAI ESTE ITEM?</Text>
+          <View style={styles.btnRow}>
+            <DecisaoBtn label="RECICLÁVEL" sub="Papel, Plast, Vidro, Met" color="#2D5AF6" onPress={() => handleDecisao('RECICLÁVEL')} />
+            <DecisaoBtn label="REJEITO" sub="Lixo Comum / Sujo" color="#444" onPress={() => handleDecisao('REJEITO')} />
+          </View>
+          <DecisaoBtn label="ECOPONTO" sub="Eletrônicos, Óleo, Pilhas" color="#F39C12" onPress={() => handleDecisao('ECOPONTO')} full />
+        </View>
       </View>
-
-      {/*
-        Botões de resposta — cada um representa uma cor de lixeira
-        A cor de fundo é aplicada inline para correspondência visual
-      */}
-      <TouchableOpacity
-        style={[styles.option, { backgroundColor: '#1976D2' }]}
-        onPress={() => choose('Azul')}
-      >
-        <Text style={styles.optionText}>🟦 Azul (Papel)</Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity
-        style={[styles.option, { backgroundColor: '#D32F2F' }]}
-        onPress={() => choose('Vermelha')}
-      >
-        <Text style={styles.optionText}>🟥 Vermelha (Plástico)</Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity
-        style={[styles.option, { backgroundColor: '#FBC02D' }]}
-        onPress={() => choose('Amarela')}
-      >
-        <Text style={styles.optionText}>🟨 Amarela (Metal)</Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity
-        style={[styles.option, { backgroundColor: '#2E7D32' }]}
-        onPress={() => choose('Verde')}
-      >
-        <Text style={styles.optionText}>🟩 Verde (Vidro)</Text>
-      </TouchableOpacity>
-
-    </ScrollView>
-
+    </SafeAreaView>
   );
 }
 
-// ============================================================
-// Estilos do componente utilizando StyleSheet do React Native
-// ============================================================
+// Subcomponente de Botão de Decisão
+function DecisaoBtn({ label, sub, color, onPress, full }: any) {
+  return (
+    <TouchableOpacity 
+      onPress={onPress} 
+      activeOpacity={0.8}
+      style={[styles.btnDecisao, { borderColor: color + '30', width: full ? '100%' : '48%' }]}
+    >
+      <View style={[styles.btnIndicator, { backgroundColor: color }]} />
+      <Text style={[styles.btnLabel, { color }]}>{label}</Text>
+      <Text style={styles.btnSub}>{sub}</Text>
+    </TouchableOpacity>
+  );
+}
+
 const styles = StyleSheet.create({
+  safeArea: { flex: 1, backgroundColor: '#FFFFFF' },
+  header: { flexDirection: 'row', justifyContent: 'space-between', padding: 24, alignItems: 'center' },
+  headerLabel: { fontSize: 10, fontWeight: '900', color: '#AAA', letterSpacing: 1 },
+  headerVal: { fontSize: 24, fontWeight: '800', color: '#1A1A1A' },
+  vidasContainer: { flexDirection: 'row' },
+  vidaEmoji: { fontSize: 20, marginLeft: 5 },
 
-  // Container principal com scroll (evita overflow em telas pequenas)
-  container: {
-    flex: 1,
-    backgroundColor: '#F4FFF6',
-    padding: 20,
-  },
-
-  // Botão de voltar posicionado no topo da tela
-  backButton: {
-    marginTop: 50,
-    marginBottom: 20,
-  },
-
-  // Texto do botão de voltar (reutilizado na tela de derrota)
-  backText: {
-    color: '#2E7D32',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-
-  // Título do jogo centralizado
-  title: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: '#2E7D32',
-    textAlign: 'center',
-  },
-
-  // Subtítulo com instrução do jogo
-  subtitle: {
-    textAlign: 'center',
-    color: '#757575',
-    marginTop: 10,
-    marginBottom: 25,
-  },
-
-  // Card de progresso com placar e corações
-  progressCard: {
-    backgroundColor: '#FFFFFF',
-    padding: 20,
-    borderRadius: 20,
-    marginBottom: 20,
+  main: { flex: 1, paddingHorizontal: 24, justifyContent: 'space-between', paddingBottom: 40 },
+  itemCard: {
+    backgroundColor: '#F8F9FA',
+    borderRadius: 32,
+    padding: 30,
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#EEE',
   },
+  emojiCircle: { width: 90, height: 90, borderRadius: 45, backgroundColor: '#FFF', justifyContent: 'center', alignItems: 'center', marginBottom: 20, elevation: 2 },
+  itemEmoji: { fontSize: 45 },
+  itemName: { fontSize: 22, fontWeight: '700', color: '#1A1A1A', marginBottom: 10 },
+  condicaoBadge: { backgroundColor: '#1A1A1A', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 8 },
+  condicaoText: { color: '#FFF', fontSize: 10, fontWeight: '900' },
 
-  // Representação visual do caminho percorrido
-  progressText: {
-    fontSize: 24,
-    marginBottom: 10,
-  },
+  feedbackOverlay: { padding: 20, borderRadius: 20, marginTop: 20, borderWidth: 1, borderColor: '#EEE' },
+  feedbackTitle: { fontWeight: '900', fontSize: 12, marginBottom: 5 },
+  feedbackMsg: { fontSize: 14, color: '#444', lineHeight: 20 },
 
-  // Pontuação atual do jogador
-  score: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#2E7D32',
-  },
+  controles: { gap: 12 },
+  controlesLabel: { fontSize: 11, fontWeight: '900', color: '#AAA', textAlign: 'center', marginBottom: 5 },
+  btnRow: { flexDirection: 'row', justifyContent: 'space-between' },
+  btnDecisao: { backgroundColor: '#FFF', padding: 16, borderRadius: 20, borderWidth: 1, alignItems: 'center' },
+  btnIndicator: { width: 30, height: 4, borderRadius: 2, marginBottom: 8 },
+  btnLabel: { fontSize: 14, fontWeight: '900' },
+  btnSub: { fontSize: 10, color: '#888', marginTop: 2, textAlign: 'center' },
 
-  // Linha de corações (vidas restantes e erros)
-  lives: {
-    marginTop: 10,
-    fontSize: 24,
-  },
-
-  // Card que exibe o resíduo a ser classificado
-  card: {
-    backgroundColor: '#FFFFFF',
-    padding: 25,
-    borderRadius: 20,
-    marginBottom: 20,
-  },
-
-  // Texto da pergunta
-  question: {
-    fontSize: 18,
-    color: '#616161',
-  },
-
-  // Resíduo em destaque para o jogador classificar
-  item: {
-    marginTop: 15,
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#2E7D32',
-    textAlign: 'center',
-  },
-
-  // Botão de opção de lixeira (cor aplicada dinamicamente)
-  option: {
-    padding: 18,
-    borderRadius: 16,
-    marginBottom: 15,
-  },
-
-  // Texto dentro dos botões de opção
-  optionText: {
-    color: '#FFFFFF',
-    fontSize: 17,
-    fontWeight: 'bold',
-    textAlign: 'center',
-  },
-
-  // Container centralizado da tela de derrota
-  endContainer: {
-    flex: 1,
-    backgroundColor: '#F4FFF6',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-
-  // Título da tela de derrota em vermelho
-  endTitle: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#D32F2F',
-    marginBottom: 10,
-  },
-
-  // Mensagem motivacional da tela de derrota
-  endSubtitle: {
-    fontSize: 16,
-    textAlign: 'center',
-    marginBottom: 30,
-    color: '#616161',
-  },
-
-  // Botão de tentar novamente
-  retryButton: {
-    backgroundColor: '#2E7D32',
-    padding: 15,
-    borderRadius: 12,
-    marginBottom: 15,
-  },
-
-  // Texto do botão de tentar novamente
-  retryText: {
-    color: '#FFF',
-    fontWeight: 'bold',
-    fontSize: 16,
-  },
-
+  // End Screen
+  endScreen: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 30 },
+  endEmoji: { fontSize: 80, marginBottom: 20 },
+  endTitle: { fontSize: 28, fontWeight: '900', color: '#1A1A1A' },
+  endText: { fontSize: 16, color: '#666', textAlign: 'center', marginTop: 10, lineHeight: 22 },
+  finalScoreCard: { backgroundColor: '#F8F9FA', padding: 30, borderRadius: 30, alignItems: 'center', marginVertical: 30, width: '100%' },
+  finalScoreVal: { fontSize: 60, fontWeight: '900', color: '#2A9D8F' },
+  finalScoreLab: { fontSize: 14, fontWeight: '700', color: '#AAA' },
+  btnPrimary: { backgroundColor: '#1A1A1A', padding: 20, borderRadius: 20, width: '100%', alignItems: 'center', marginBottom: 12 },
+  btnPrimaryText: { color: '#FFF', fontWeight: '800', fontSize: 16 },
+  btnSecondary: { padding: 15 },
+  btnSecondaryText: { color: '#888', fontWeight: '700' },
 });

@@ -71,23 +71,23 @@ function BottomTabs() {
     <Tab.Navigator
       screenOptions={({ route }) => ({
         headerShown: false,
-        tabBarActiveTintColor: '#4CAF50',
+        tabBarActiveTintColor: '#397e3b',
         tabBarInactiveTintColor: '#A0A0A0',
         tabBarHideOnKeyboard: true,
         tabBarStyle: {
           position: 'absolute',
           left: 10,
           right: 10,
-          bottom: 18,
-          height: 80,
-          borderRadius: 25,
-          backgroundColor: '#1B1B1B',
+          bottom: 0,
+          height: 60,
           borderTopWidth: 0,
+          borderRadius: 5,
+          backgroundColor: '#ffffff',
           elevation: 15,
         },
         tabBarLabelStyle: {
           fontSize: 12,
-          fontWeight: '600',
+          fontWeight: '800',
           marginBottom: 8,
         },
         tabBarIcon: ({ color }) => {
@@ -95,7 +95,7 @@ function BottomTabs() {
           if (route.name === 'Início') iconName = 'home';
           else if (route.name === 'Acervo') iconName = 'leaf';
           else if (route.name === 'Mapa') iconName = 'location';
-          else if (route.name === 'Recompensas') iconName = 'gift';
+          else if (route.name === 'Prêmios') iconName = 'gift';
           else if (route.name === 'Admin') iconName = 'shield-checkmark-outline';
           else if (route.name === 'Perfil') iconName = 'person';
           return <Ionicons name={iconName} size={24} color={color} />;
@@ -105,7 +105,7 @@ function BottomTabs() {
       <Tab.Screen name="Início" component={HomeScreen} />
       <Tab.Screen name="Acervo" component={CollectionScreen} />
       <Tab.Screen name="Mapa" component={MapScreen} />
-      <Tab.Screen name="Recompensas" component={RewardsScreen} />
+      <Tab.Screen name="Prêmios" component={RewardsScreen} />
       <Tab.Screen name="Perfil" component={ProfileScreen} />
       {isAdmin && <Tab.Screen name="Admin" component={AdminScreen} />}
     </Tab.Navigator>

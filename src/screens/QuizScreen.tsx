@@ -1,410 +1,427 @@
-// ============================================================
+// ============================================================================
 // QuizScreen.tsx
-// Tela do mini-jogo Quiz Eco
-// Apresenta 5 perguntas sobre reciclagem e meio ambiente.
-// Ao finalizar, salva EcoScore e XP no Firestore e exibe
-// a tela de resultado com a pontuação obtida.
-// ============================================================
+// Tela do mini-jogo Quiz Eco - Versão Premium & Interativa.
+// CORREÇÃO: Tipagem de estilos para evitar erros no VSCode/TypeScript.
+// ============================================================================
 
-import React, { useState } from 'react';
-
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
   TouchableOpacity,
   StyleSheet,
-  ScrollView,
-  Alert,
+  SafeAreaView,
+  StatusBar,
+  Dimensions,
+  Animated,
+  // Adicionadas tipagens explícitas do React Native
+  StyleProp,
+  ViewStyle,
+  TextStyle,
 } from 'react-native';
 
-// Instâncias de autenticação e banco de dados configuradas no projeto
+// Importações do Firebase
 import { auth, db } from '../services/firebaseConfig';
-
-// Funções do Firestore para atualizar o documento do usuário
 import {
   doc,
   updateDoc,
   increment,
 } from 'firebase/firestore';
 
-// -------------------------------------------------------
-// Tipagem das props de navegação recebidas pelo componente
-// -------------------------------------------------------
+const { width } = Dimensions.get('window');
+
+// ----------------------------------------------------------------------------
+// Tipagem das Props e Dados
+// ----------------------------------------------------------------------------
 interface QuizScreenProps {
   navigation: any;
 }
 
-// -------------------------------------------------------
-// Tipagem de cada questão do quiz
-// -------------------------------------------------------
 interface Question {
-  question: string;   // Enunciado da pergunta
-  options: string[];  // Lista de alternativas
-  correct: number;    // Índice da alternativa correta no array options
+  question: string;
+  options: string[];
+  correct: number;
 }
 
-// -------------------------------------------------------
-// Componente principal da tela de Quiz
-// -------------------------------------------------------
+// ----------------------------------------------------------------------------
+// Componente Principal
+// ----------------------------------------------------------------------------
 export default function QuizScreen({ navigation }: QuizScreenProps) {
-
-  // Lista estática de perguntas sobre meio ambiente e reciclagem
+  
   const questions: Question[] = [
     {
       question: 'Qual cor representa a reciclagem de papel?',
       options: ['Verde', 'Azul', 'Amarelo', 'Vermelho'],
-      correct: 1, // 'Azul'
+      correct: 1,
     },
     {
       question: 'Qual material demora mais para se decompor?',
       options: ['Papel', 'Casca de banana', 'Plástico', 'Folha'],
-      correct: 2, // 'Plástico'
+      correct: 2,
     },
     {
       question: 'O óleo de cozinha deve ser descartado:',
       options: ['Na pia', 'No vaso', 'Em pontos de coleta', 'Na rua'],
-      correct: 2, // 'Em pontos de coleta'
+      correct: 2,
     },
     {
       question: 'Qual desses pode ser reciclado?',
       options: ['Garrafa PET', 'Resto de comida', 'Guardanapo usado', 'Fralda'],
-      correct: 0, // 'Garrafa PET'
+      correct: 0,
     },
     {
       question: 'Reciclar ajuda a:',
-      options: [
-        'Aumentar lixo',
-        'Poluir rios',
-        'Preservar recursos naturais',
-        'Desmatar',
-      ],
-      correct: 2, // 'Preservar recursos naturais'
+      options: ['Aumentar lixo', 'Poluir rios', 'Preservar recursos', 'Desmatar'],
+      correct: 2,
     },
   ];
 
-  // Índice da pergunta sendo exibida no momento
-  const [currentQuestion, setCurrentQuestion] = useState(0);
+  const [currentIdx, setCurrentIdx] = useState(0);
+  const [score, setScore] = useState(0);
+  const [selectedOption, setSelectedOption] = useState<number | null>(null);
+  const [isAnswered, setIsAnswered] = useState(false);
+  const [isFinished, setIsFinished] = useState(false);
+  const progressAnim = useState(new Animated.Value(0))[0];
 
-  // Contador de acertos acumulados durante o quiz
-  const [hits, setHits] = useState(0);
+  useEffect(() => {
+    Animated.timing(progressAnim, {
+      toValue: (currentIdx + 1) / questions.length,
+      duration: 500,
+      useNativeDriver: false,
+    }).start();
+  }, [currentIdx]);
 
-  // Flag que bloqueia novas respostas após o usuário já ter escolhido
-  const [answered, setAnswered] = useState(false);
-
-  // Flag que controla a exibição da tela de resultado final
-  const [finished, setFinished] = useState(false);
-
-  // -------------------------------------------------------
-  // Salva a pontuação no Firestore e exibe a tela de resultado
-  // Chamada quando o usuário responde a última pergunta
-  // -------------------------------------------------------
-  async function finishQuiz(totalHits: number) {
-
+  async function handleFinish(finalScore: number) {
     try {
-
       const uid = auth.currentUser?.uid;
-
       if (uid) {
-        // increment() soma o valor ao campo existente no Firestore
-        // sem precisar buscar o valor atual antes de atualizar
         await updateDoc(doc(db, 'users', uid), {
-          ecoScore: increment(totalHits * 100), // 100 EcoScore por acerto
-          xp:       increment(totalHits * 50),  // 50 XP por acerto
+          ecoScore: increment(finalScore * 100),
+          xp: increment(finalScore * 50),
         });
       }
-
-      // Ativa a tela de resultado
-      setFinished(true);
-
+      setIsFinished(true);
     } catch (error) {
-
-      console.log('Erro ao salvar pontuação do quiz:', error);
-
-      Alert.alert(
-        'Erro',
-        'Não foi possível salvar sua pontuação.'
-      );
+      console.error('Erro ao salvar no Firestore:', error);
+      setIsFinished(true);
     }
   }
 
-  // -------------------------------------------------------
-  // Processa a resposta do usuário ao tocar em uma alternativa
-  // Aplica feedback visual e avança para a próxima pergunta
-  // -------------------------------------------------------
-  function answer(index: number) {
-
-    // Ignora toques se o usuário já respondeu esta pergunta
-    if (answered) return;
-
-    const isCorrect = index === questions[currentQuestion].correct;
-
-    // Bloqueia novas respostas e aciona o feedback de cores
-    setAnswered(true);
-
-    // Variável local para acumular acertos sem depender do estado assíncrono
-    let newHits = hits;
-
-    if (isCorrect) {
-      newHits = hits + 1;
-      setHits(newHits);
-    }
-
-    /*
-      setTimeout aguarda 800ms antes de avançar,
-      permitindo que o usuário veja o feedback de cor
-      (verde = certo, vermelho = errado) antes de mudar a pergunta
-    */
+  function handleAnswer(index: number) {
+    if (isAnswered) return;
+    setSelectedOption(index);
+    setIsAnswered(true);
+    const correct = index === questions[currentIdx].correct;
+    const newScore = correct ? score + 1 : score;
+    if (correct) setScore(newScore);
     setTimeout(() => {
-
-      const isLast = currentQuestion === questions.length - 1;
-
-      if (isLast) {
-        // Última pergunta: finaliza o quiz e salva no Firestore
-        finishQuiz(newHits);
+      if (currentIdx < questions.length - 1) {
+        setCurrentIdx(currentIdx + 1);
+        setIsAnswered(false);
+        setSelectedOption(null);
       } else {
-        // Avança para a próxima pergunta e libera novas respostas
-        setCurrentQuestion(currentQuestion + 1);
-        setAnswered(false);
+        handleFinish(newScore);
       }
-
-    }, 800);
+    }, 1200);
   }
 
-  // -------------------------------------------------------
-  // Reinicia todos os estados para uma nova partida
-  // -------------------------------------------------------
-  function restartQuiz() {
-    setCurrentQuestion(0);
-    setHits(0);
-    setAnswered(false);
-    setFinished(false);
+  function restart() {
+    setCurrentIdx(0);
+    setScore(0);
+    setSelectedOption(null);
+    setIsAnswered(false);
+    setIsFinished(false);
   }
 
-  // -------------------------------------------------------
-  // Tela de resultado — exibida após responder todas as perguntas
-  // -------------------------------------------------------
-  if (finished) {
-
+  if (isFinished) {
     return (
-
-      <View style={styles.resultContainer}>
-
-        <Text style={styles.resultTitle}>
-          🎉 Quiz Finalizado!
-        </Text>
-
-        {/* Resumo de acertos sobre o total de perguntas */}
-        <Text style={styles.resultText}>
-          Você acertou {hits} de {questions.length} perguntas
-        </Text>
-
-        {/* Recompensas recebidas — calculadas com base nos acertos */}
-        <Text style={styles.resultPoints}>
-          +{hits * 100} EcoScore
-        </Text>
-
-        <Text style={styles.resultPoints}>
-          +{hits * 50} XP
-        </Text>
-
-        {/* Botão para jogar novamente sem sair da tela */}
-        <TouchableOpacity
-          style={styles.button}
-          onPress={restartQuiz}
-        >
-          <Text style={styles.buttonText}>
-            🔁 Tentar novamente
-          </Text>
-        </TouchableOpacity>
-
-        {/* Link para voltar ao menu anterior */}
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Text style={styles.backText}>
-            ← Voltar ao menu
-          </Text>
-        </TouchableOpacity>
-
-      </View>
-
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.resultContainer}>
+          <Text style={styles.resultEmoji}>🏆</Text>
+          <Text style={styles.resultTitle}>Incrível!</Text>
+          <Text style={styles.resultSubtitle}>Você completou o Quiz Eco</Text>
+          <View style={styles.scoreCard}>
+            <View style={styles.scoreItem}>
+              <Text style={styles.scoreValue}>{score}/{questions.length}</Text>
+              <Text style={styles.scoreLabel}>Acertos</Text>
+            </View>
+            <View style={styles.verticalDivider} />
+            <View style={styles.scoreItem}>
+              <Text style={styles.scoreValue}>+{score * 100}</Text>
+              <Text style={styles.scoreLabel}>EcoScore</Text>
+            </View>
+          </View>
+          <TouchableOpacity style={styles.primaryButton} onPress={restart}>
+            <Text style={styles.primaryButtonText}>Jogar Novamente</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.secondaryButton} onPress={() => navigation.goBack()}>
+            <Text style={styles.secondaryButtonText}>Voltar ao Início</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
     );
   }
 
-  // -------------------------------------------------------
-  // Tela principal do quiz — pergunta atual + alternativas
-  // -------------------------------------------------------
+  const currentQuestion = questions[currentIdx];
+
   return (
-
-    <ScrollView style={styles.container}>
-
-      {/* Botão de voltar para a tela anterior */}
-      <TouchableOpacity onPress={() => navigation.goBack()}>
-        <Text style={styles.backText}>← Voltar</Text>
-      </TouchableOpacity>
-
-      <Text style={styles.title}>🧠 Quiz Eco</Text>
-
-      {/* Indicador de progresso: pergunta atual / total */}
-      <Text style={styles.progress}>
-        Pergunta {currentQuestion + 1} / {questions.length}
-      </Text>
-
-      <View style={styles.card}>
-
-        {/* Enunciado da pergunta atual */}
-        <Text style={styles.question}>
-          {questions[currentQuestion].question}
-        </Text>
-
-        {/*
-          Renderiza uma alternativa para cada opção da pergunta.
-          A cor de fundo muda após a resposta:
-          - Verde (#A5D6A7) para a alternativa correta
-          - Vermelho (#FFCDD2) para as incorretas
-          - Verde claro (#E8F5E9) enquanto não respondida
-        */}
-        {questions[currentQuestion].options.map((option, index) => {
-
-          const isCorrect = index === questions[currentQuestion].correct;
-
-          // Define a cor de fundo com base no estado de resposta
-          const backgroundColor = answered
-            ? isCorrect
-              ? '#A5D6A7' // Verde: alternativa correta
-              : '#FFCDD2' // Vermelho: alternativa incorreta
-            : '#E8F5E9';  // Verde claro: ainda não respondida
-
-          return (
-            <TouchableOpacity
-              key={index}
-              style={[styles.option, { backgroundColor }]}
-              onPress={() => answer(index)}
-              disabled={answered} // Desabilita após responder
-            >
-              <Text style={styles.optionText}>
-                {option}
-              </Text>
-            </TouchableOpacity>
-          );
-
-        })}
-
+    <SafeAreaView style={styles.safeArea}>
+      <StatusBar barStyle="dark-content" />
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+          <Text style={styles.backIcon}>✕</Text>
+        </TouchableOpacity>
+        <View style={styles.progressWrapper}>
+          <View style={styles.progressBarBg}>
+            <Animated.View 
+              style={[
+                styles.progressBarFill, 
+                { width: progressAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: ['0%', '100%']
+                })}
+              ]} 
+            />
+          </View>
+          <Text style={styles.progressText}>
+            Questão {currentIdx + 1} de {questions.length}
+          </Text>
+        </View>
       </View>
 
-    </ScrollView>
+      <View style={styles.content}>
+        <View style={styles.questionContainer}>
+          <Text style={styles.questionText}>{currentQuestion.question}</Text>
+        </View>
 
+        <View style={styles.optionsContainer}>
+          {currentQuestion.options.map((option, index) => {
+            const isCorrect = index === currentQuestion.correct;
+            const isSelected = selectedOption === index;
+            
+            // ----------------------------------------------------------------
+            // CORREÇÃO DE TIPAGEM: Definindo tipos explicitamente para o TS
+            // ----------------------------------------------------------------
+            let optionStyle: StyleProp<ViewStyle> = styles.optionButton;
+            let textStyle: StyleProp<TextStyle> = styles.optionText;
+
+            if (isAnswered) {
+              if (isCorrect) {
+                optionStyle = [styles.optionButton, styles.correctOption];
+                textStyle = [styles.optionText, styles.correctText];
+              } else if (isSelected) {
+                optionStyle = [styles.optionButton, styles.wrongOption];
+                textStyle = [styles.optionText, styles.wrongText];
+              } else {
+                optionStyle = [styles.optionButton, { opacity: 0.5 }];
+              }
+            } else if (isSelected) {
+              optionStyle = [styles.optionButton, styles.selectedOption];
+            }
+
+            return (
+              <TouchableOpacity
+                key={index}
+                style={optionStyle}
+                onPress={() => handleAnswer(index)}
+                activeOpacity={0.7}
+                disabled={isAnswered}
+              >
+                <View style={styles.optionRow}>
+                  <View style={[styles.optionIndex, isAnswered && isCorrect && { backgroundColor: '#FFF' }]}>
+                    <Text style={[styles.optionIndexText, isAnswered && isCorrect && { color: '#27AE60' }]}>
+                      {String.fromCharCode(65 + index)}
+                    </Text>
+                  </View>
+                  <Text style={textStyle}>{option}</Text>
+                </View>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      </View>
+    </SafeAreaView>
   );
 }
 
-// ============================================================
-// Estilos do componente utilizando StyleSheet do React Native
-// ============================================================
 const styles = StyleSheet.create({
-
-  // Container principal com scroll vertical
-  container: {
+  safeArea: {
+    flex: 1, 
+    backgroundColor: '#FFFFFF' 
+  },
+  header: { 
+    paddingHorizontal: 20,
+    paddingTop: 10,
+    flexDirection: 'row',
+    alignItems: 'center'
+  },
+  backButton: { width: 40, 
+    height: 40, 
+    justifyContent: 'center' 
+  },
+  backIcon: { 
+    fontSize: 20, 
+    color: '#333', 
+    fontWeight: '300'
+  },
+  progressWrapper: {
+    flex: 1, 
+    marginLeft: 10 
+  },
+  progressBarBg: { 
+    height: 8, 
+    backgroundColor: '#F0F0F0', 
+    borderRadius: 4,
+    overflow: 'hidden' 
+  },
+  progressBarFill: { 
+    height: '100%',
+    backgroundColor: '#27AE60',
+    borderRadius: 4 
+  },
+  progressText: { 
+    fontSize: 12,
+    color: '#888',
+    marginTop: 6,
+    fontWeight: '600'
+  },
+  content: { 
     flex: 1,
-    backgroundColor: '#F4FFF6',
-    padding: 20,
+    paddingHorizontal: 24, 
+    justifyContent: 'center' 
   },
-
-  // Texto de voltar (reutilizado na tela de resultado)
-  backText: {
-    marginTop: 60,
-    marginBottom: 10,
-    color: '#1b79cc',
-    fontSize: 18,
-    fontWeight: 'bold',
+  questionContainer: { 
+    marginBottom: 40 
   },
-
-  // Título do quiz centralizado
-  title: {
-    fontSize: 30,
-    fontWeight: 'bold',
-    color: '#2E7D32',
-    textAlign: 'center',
+  questionText: { 
+    fontSize: 28, 
+    fontWeight: '800', 
+    color: '#1A1A1A', 
+    lineHeight: 36 
   },
-
-  // Indicador de progresso abaixo do título
-  progress: {
-    textAlign: 'center',
-    marginTop: 10,
-    marginBottom: 30,
-    color: '#757575',
-    fontSize: 16,
+  optionsContainer: { 
+    gap: 12 
   },
-
-  // Card branco que contém a pergunta e as alternativas
-  card: {
-    backgroundColor: '#FFFFFF',
-    padding: 25,
-    borderRadius: 20,
+  optionButton: { 
+    backgroundColor: '#F8F9FA', 
+    padding: 18, borderRadius: 20, 
+    borderWidth: 1, 
+    borderColor: '#EEE' 
   },
-
-  // Enunciado da pergunta em verde e negrito
-  question: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: '#2E7D32',
-    marginBottom: 25,
+  optionRow: { 
+    flexDirection: 'row', 
+    alignItems: 'center' 
   },
-
-  // Botão de cada alternativa — cor aplicada dinamicamente
-  option: {
-    padding: 16,
-    borderRadius: 14,
-    marginBottom: 12,
+  optionIndex: { 
+    width: 30, 
+    height: 30, 
+    borderRadius: 10, 
+    backgroundColor: '#E9ECEF', 
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    marginRight: 15 
   },
-
-  // Texto da alternativa em verde escuro
-  optionText: {
-    fontSize: 16,
-    color: '#1B5E20',
-    fontWeight: '600',
+  optionIndexText: { 
+    fontSize: 14, 
+    fontWeight: 'bold', 
+    color: '#495057' 
   },
-
-  // Container centralizado da tela de resultado final
-  resultContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#F4FFF6',
-    padding: 20,
+  optionText: { 
+    fontSize: 16, 
+    fontWeight: '600', 
+    color: '#333', 
+    flex: 1 
   },
-
-  // Título da tela de resultado
-  resultTitle: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#2E7D32',
-    marginBottom: 20,
+  selectedOption: { 
+    borderColor: '#27AE60', 
+    backgroundColor: '#F1F9F4'
   },
-
-  // Texto com total de acertos
-  resultText: {
-    fontSize: 18,
-    marginBottom: 10,
-    textAlign: 'center',
+  correctOption: { 
+    backgroundColor: '#27AE60', 
+    borderColor: '#27AE60' 
   },
-
-  // Recompensas de EcoScore e XP em verde escuro
-  resultPoints: {
-    fontSize: 16,
-    marginBottom: 5,
-    color: '#1B5E20',
+  correctText: { 
+    color: '#FFF'
   },
-
-  // Botão de tentar novamente
-  button: {
-    marginTop: 25,
-    backgroundColor: '#2E7D32',
-    padding: 15,
-    borderRadius: 12,
+  wrongOption: { 
+    backgroundColor: '#EB5757', 
+    borderColor: '#EB5757' 
   },
-
-  // Texto do botão de tentar novamente
-  buttonText: {
-    color: '#FFF',
-    fontWeight: 'bold',
+  wrongText: { 
+    color: '#FFF' 
   },
-
+  resultContainer: { 
+    flex: 1, 
+    alignItems: 'center', 
+    justifyContent: 'center', 
+    padding: 30 
+  },
+  resultEmoji: { 
+    fontSize: 80,
+    marginBottom: 20 
+  },
+  resultTitle: { 
+    fontSize: 32, 
+    fontWeight: '800', 
+    color: '#1A1A1A' 
+  },
+  resultSubtitle: {
+    fontSize: 16, 
+    color: '#666', 
+    marginBottom: 40 
+  },
+  scoreCard: { 
+    flexDirection: 'row', 
+    backgroundColor: '#F8F9FA', 
+    borderRadius: 24, 
+    padding: 24, 
+    width: '100%', 
+    marginBottom: 40, 
+    borderWidth: 1, 
+    borderColor: '#EEE'
+  },
+  scoreItem: { 
+    flex: 1, 
+    alignItems: 'center' 
+  },
+  scoreValue: { 
+    fontSize: 24, 
+    fontWeight: '800', 
+    color: '#27AE60' 
+  },
+  scoreLabel: { 
+    fontSize: 12, 
+    color: '#888', 
+    fontWeight: '600', 
+    marginTop: 4 
+  },
+  verticalDivider: { 
+    width: 1, 
+    backgroundColor: '#DDD', 
+    marginHorizontal: 10 
+  },
+  primaryButton: { 
+    backgroundColor: '#27AE60', 
+    paddingVertical: 18, 
+    paddingHorizontal: 40,
+     borderRadius: 20, 
+     width: '100%', 
+     alignItems: 'center', 
+     marginBottom: 15
+  },
+  primaryButtonText: { 
+    color: '#FFF', 
+    fontSize: 16, 
+    fontWeight: '700' 
+  },
+  secondaryButton: { 
+    paddingVertical: 15,
+     width: '100%', 
+     alignItems: 'center' 
+  },
+  secondaryButtonText: { 
+    color: '#888', 
+    fontSize: 15, 
+    fontWeight: '600'
+  },
 });

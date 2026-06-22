@@ -1,282 +1,472 @@
 // ============================================================
 // ProfileScreen.tsx
-// Tela de perfil do usuário autenticado
-// Exibe nome, e-mail, EcoScore, XP, nível, missões concluídas
-// e oferece a opção de logout com redirecionamento para o Login
+// Tela de Perfil modernizada para o App de Reciclagem
+// Desenvolvida para: Android e Web (Expo/React Native)
 // ============================================================
 
 import React, { useEffect, useState } from 'react';
-
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
   ScrollView,
+  ActivityIndicator,
+  Modal, // Usado para criar a caixa de confirmação personalizada
 } from 'react-native';
-
-// Função de logout do Firebase Auth
-import { signOut } from 'firebase/auth';
-
-// Instâncias de autenticação e banco de dados configuradas no projeto
-import { auth, db } from '../services/firebaseConfig';
-
-// Funções do Firestore para buscar o documento do usuário
-import { doc, getDoc } from 'firebase/firestore';
-
-// Hook de navegação do React Navigation
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 
-// -------------------------------------------------------
-// Componente principal da tela de perfil
-// -------------------------------------------------------
-export default function ProfileScreen() {
+// Importações do Firebase
+import { signOut } from 'firebase/auth';
+import { auth, db } from '../services/firebaseConfig';
+import { doc, onSnapshot } from 'firebase/firestore';
 
-  // Hook que fornece acesso ao objeto de navegação
+// Biblioteca de Ícones (Padrão no Expo)
+import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
+
+// -------------------------------------------------------
+// Tipagem dos dados que vêm do Firestore
+// -------------------------------------------------------
+interface UserData {
+  ecoScore: number;
+  xp: number;
+  missionsDone: number;
+}
+
+export default function ProfileScreen() {
+  // Hook de navegação para mudar de tela
   const navigation = useNavigation<any>();
 
-  // Estados com os dados do perfil carregados do Firestore
-  const [ecoScore, setEcoScore]       = useState(0);
-  const [xp, setXp]                   = useState(0);
-  const [missionsDone, setMissionsDone] = useState(0);
+  // Estados para armazenar os dados do usuário e controlar o carregamento
+  const [userData, setUserData] = useState<UserData>({ ecoScore: 0, xp: 0, missionsDone: 0 });
+  const [isLoading, setIsLoading] = useState(true);
+  
+  // Estado que controla se o Modal de Sair está visível ou não
+  const [isLogoutModalVisible, setIsLogoutModalVisible] = useState(false);
 
-  // Dados do usuário autenticado disponíveis diretamente no Firebase Auth
+  // Obtém o usuário atualmente logado no Firebase Auth
   const user = auth.currentUser;
 
   // -------------------------------------------------------
-  // Busca os dados do usuário no Firestore ao montar a tela
+  // Efeito para buscar dados do Firestore em Tempo Real
   // -------------------------------------------------------
   useEffect(() => {
-
-    async function loadData() {
-
-      const uid = auth.currentUser?.uid;
-
-      // Interrompe se o usuário não estiver autenticado
-      if (!uid) return;
-
-      try {
-
-        // Referência ao documento do usuário na coleção 'users'
-        const userRef = doc(db, 'users', uid);
-        const snapshot = await getDoc(userRef);
-
-        if (snapshot.exists()) {
-
-          const data = snapshot.data();
-
-          // Atualiza os estados — ?? garante 0 como fallback seguro para números
-          setEcoScore(data.ecoScore ?? 0);
-          setXp(data.xp ?? 0);
-          setMissionsDone(data.missionsDone ?? 0);
-        }
-
-      } catch (error) {
-
-        console.log('Erro ao carregar perfil:', error);
-
-      }
+    const uid = auth.currentUser?.uid;
+    
+    if (!uid) {
+      setIsLoading(false);
+      return;
     }
 
-    loadData();
+    // Cria uma referência ao documento do usuário
+    const userRef = doc(db, 'users', uid);
 
-  }, []); // Array vazio = executa apenas uma vez, na montagem
+    // Ouve mudanças no banco de dados. Se o XP mudar em outra tela, aqui atualiza sozinho!
+    const unsubscribe = onSnapshot(userRef, (snapshot) => {
+      if (snapshot.exists()) {
+        setUserData(snapshot.data() as UserData);
+      }
+      setIsLoading(false);
+    }, (error) => {
+      console.error("Erro ao carregar perfil:", error);
+      setIsLoading(false);
+    });
 
-  // Nível calculado com base no XP: a cada 300 XP o usuário sobe um nível
-  const level = Math.floor(xp / 300);
+    // Limpa o "ouvinte" quando o usuário sai da tela
+    return () => unsubscribe();
+  }, []);
+
+  // Cálculo simples de nível (Ex: cada 300 XP = 1 Nível)
+  const level = Math.floor(userData.xp / 300);
 
   // -------------------------------------------------------
-  // Realiza o logout e redireciona para a tela de Login
+  // Função para realizar o Logout definitivo
   // -------------------------------------------------------
-  async function handleLogout() {
-
+  const confirmLogout = async () => {
+    setIsLogoutModalVisible(false); // Fecha o modal
     try {
-
-      // Encerra a sessão do usuário no Firebase Auth
-      await signOut(auth);
-
-      // navigation.reset() limpa o histórico de navegação,
-      // impedindo que o usuário volte para telas autenticadas
-      // ao pressionar o botão de voltar
+      await signOut(auth); // Desloga do Firebase
+      
+      // Reseta a navegação para que o usuário não consiga "voltar" para a Home
       navigation.reset({
         index: 0,
         routes: [{ name: 'Login' }],
       });
-
     } catch (error) {
-
       console.log('Erro ao fazer logout:', error);
-
     }
+  };
+
+  // Enquanto os dados não chegam, mostra uma rodinha de carregamento
+  if (isLoading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#2D6A4F" />
+      </View>
+    );
   }
 
-  // -------------------------------------------------------
-  // Renderização principal: header + cards de estatísticas + logout
-  // -------------------------------------------------------
   return (
-
-    <ScrollView
-      style={styles.container}
-      showsVerticalScrollIndicator={false}
-      contentContainerStyle={{ paddingBottom: 140 }}
-    >
-
-      {/* ── HEADER: avatar, nome e e-mail do usuário ── */}
-      <View style={styles.header}>
-
-        {/* Avatar em emoji — substituto visual enquanto não há foto de perfil */}
-        <Text style={styles.avatar}>
-          👤
-        </Text>
-
-        {/* Nome do usuário com fallback para 'Usuário' se não definido */}
-        <Text style={styles.name}>
-          {user?.displayName || 'Usuário'}
-        </Text>
-
-        {/* E-mail da conta autenticada */}
-        <Text style={styles.email}>
-          {user?.email}
-        </Text>
-
-      </View>
-
-      {/* ── CARDS DE ESTATÍSTICAS ── */}
-
-      {/* Card do EcoScore — pontuação ecológica principal */}
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>🌱 EcoScore</Text>
-        <Text style={styles.bigNumber}>{ecoScore}</Text>
-      </View>
-
-      {/* Card de XP — pontos de experiência acumulados */}
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>⭐ XP Atual</Text>
-        <Text style={styles.bigNumber}>{xp}</Text>
-      </View>
-
-      {/* Card de nível — calculado a partir do XP (300 XP por nível) */}
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>🏆 Nível</Text>
-        <Text style={styles.bigNumber}>{level}</Text>
-        <Text style={styles.subtitle}>Eco Guardião</Text>
-      </View>
-
-      {/* Card de missões concluídas */}
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>♻️ Missões Concluídas</Text>
-        <Text style={styles.bigNumber}>{missionsDone}</Text>
-      </View>
-
-      {/*
-        Botão de logout em vermelho — cor convencionalmente usada
-        para ações destrutivas ou de saída
-      */}
-      <TouchableOpacity
-        style={styles.logoutButton}
-        onPress={handleLogout}
+    <SafeAreaView style={styles.safeArea}>
+      
+      {/* ── MODAL DE CONFIRMAÇÃO (Substitui o Alert nativo) ── */}
+      <Modal
+        animationType="fade" // Aparece suavemente
+        transparent={true}    // Fundo semitransparente
+        visible={isLogoutModalVisible}
+        onRequestClose={() => setIsLogoutModalVisible(false)}
       >
-        <Text style={styles.logoutText}>
-          Sair da Conta
-        </Text>
-      </TouchableOpacity>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            {/* Ícone de Saída no Modal */}
+            <View style={styles.modalIconBg}>
+              <Ionicons name="log-out" size={40} color="#D32F2F" />
+            </View>
+            
+            <Text style={styles.modalTitle}>Sair da Conta</Text>
+            <Text style={styles.modalText}>
+              Tem certeza que deseja encerrar sua sessão?
+            </Text>
+            
+            {/* Botões do Modal */}
+            <View style={styles.modalButtonsRow}>
+              <TouchableOpacity 
+                style={styles.cancelBtn} 
+                onPress={() => setIsLogoutModalVisible(false)}
+              >
+                <Text style={styles.cancelBtnText}>Cancelar</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={styles.confirmBtn} 
+                onPress={confirmLogout}
+              >
+                <Text style={styles.confirmBtnText}>Sair</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
-    </ScrollView>
+      {/* Conteúdo da Tela com Scroll (para telas pequenas não cortarem nada) */}
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+        
+        {/* Botão de Voltar para a Home */}
+        <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
+          <Ionicons name="arrow-back" size={24} color="#2D6A4F" />
+        </TouchableOpacity>
 
+        {/* ── SEÇÃO DO CABEÇALHO (Avatar e Nome) ── */}
+        <View style={styles.headerSection}>
+          {/* Círculo com a Inicial do Nome */}
+          <View style={styles.avatarCircle}>
+            <Text style={styles.avatarInitial}>
+              {user?.displayName ? user.displayName.charAt(0).toUpperCase() : 'U'}
+            </Text>
+          </View>
+          
+          <Text style={styles.userName}>{user?.displayName || 'Usuário'}</Text>
+          <Text style={styles.userEmail}>{user?.email}</Text>
+          
+          {/* Badge de Nível */}
+          <View style={styles.levelBadge}>
+            <MaterialCommunityIcons name="trophy" size={16} color="#FFD600" />
+            <Text style={styles.levelBadgeText}>Eco Guardião • Nível {level}</Text>
+          </View>
+        </View>
+
+        {/* ── GRID DE ESTATÍSTICAS (EcoScore e XP) ── */}
+        <View style={styles.statsGrid}>
+          {/* Card EcoScore */}
+          <View style={styles.statCard}>
+            <View style={[styles.statIconBox, { backgroundColor: '#E8F5E9' }]}>
+              <MaterialCommunityIcons name="leaf" size={24} color="#2D6A4F" />
+            </View>
+            <Text style={styles.statValue}>{userData.ecoScore}</Text>
+            <Text style={styles.statLabel}>EcoScore</Text>
+          </View>
+
+          {/* Card XP Total */}
+          <View style={styles.statCard}>
+            <View style={[styles.statIconBox, { backgroundColor: '#FFF8E1' }]}>
+              <MaterialCommunityIcons name="star" size={24} color="#FFA000" />
+            </View>
+            <Text style={styles.statValue}>{userData.xp}</Text>
+            <Text style={styles.statLabel}>XP Total</Text>
+          </View>
+        </View>
+
+        {/* ── SEÇÃO DE IMPACTO ACUMULADO ── */}
+        <View style={styles.sectionContainer}>
+          <Text style={styles.sectionTitle}>Seu Impacto no Planeta</Text>
+          
+          <View style={styles.impactRow}>
+            {/* Itens Reciclados */}
+            <View style={styles.impactItem}>
+              <MaterialCommunityIcons name="recycle" size={32} color="#2D6A4F" />
+              <Text style={styles.impactValue}>{userData.missionsDone}</Text>
+              <Text style={styles.impactLabel}>Itens</Text>
+            </View>
+            
+            {/* Água Economizada */}
+            <View style={styles.impactItem}>
+              <MaterialCommunityIcons name="water" size={32} color="#1976D2" />
+              <Text style={styles.impactValue}>{userData.missionsDone * 50}L</Text>
+              <Text style={styles.impactLabel}>Água</Text>
+            </View>
+            
+            {/* CO2 Evitado */}
+            <View style={styles.impactItem}>
+              <MaterialCommunityIcons name="molecule-co2" size={32} color="#455A64" />
+              <Text style={styles.impactValue}>{userData.missionsDone * 2}kg</Text>
+              <Text style={styles.impactLabel}>CO₂</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* ── BOTÃO DE LOGOUT (Encerrar Sessão) ── */}
+        <TouchableOpacity 
+          style={styles.logoutFullButton} 
+          onPress={() => setIsLogoutModalVisible(true)}
+        >
+          <Ionicons name="log-out-outline" size={22} color="#FFF" style={{marginRight: 10}} />
+          <Text style={styles.logoutFullButtonText}>Encerrar Sessão</Text>
+        </TouchableOpacity>
+
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
-// ============================================================
-// Estilos do componente utilizando StyleSheet do React Native
-// ============================================================
+// -------------------------------------------------------
+// ESTILIZAÇÃO (CSS-in-JS)
+// -------------------------------------------------------
 const styles = StyleSheet.create({
-
-  // Container principal com scroll vertical
-  container: {
+  safeArea: {
     flex: 1,
-    backgroundColor: '#F4FFF6',
-    padding: 20,
+    backgroundColor: '#F8F9FA', // Cor de fundo cinza bem clarinho
   },
-
-  // Header centralizado com avatar, nome e e-mail
-  header: {
+  scrollContent: {
+    padding: 20,
+    paddingBottom: 110,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 50,
-    marginBottom: 30,
   },
-
-  // Avatar emoji de grande dimensão
-  avatar: {
-    fontSize: 70,
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: '#FFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 20,
+    elevation: 2, // Sombra no Android
+    shadowColor: '#000', // Sombra no iOS
+    shadowOpacity: 0.05,
+    shadowRadius: 5,
   },
-
-  // Nome do usuário em verde e negrito
-  name: {
-    fontSize: 26,
-    fontWeight: 'bold',
-    color: '#2E7D32',
-    marginTop: 10,
+  headerSection: {
+    alignItems: 'center',
+    marginBottom: 35,
   },
-
-  // E-mail em cinza abaixo do nome
-  email: {
-    color: '#757575',
-    marginTop: 5,
-    fontSize: 15,
-  },
-
-  // Card branco com sombra para cada estatística
-  card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    padding: 20,
-    marginBottom: 16,
-
-    // Sombra para iOS
-    shadowColor: '#000',
-    shadowOpacity: 0.08,
+  avatarCircle: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: '#2E7D32', // Verde escuro
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 5,
+    shadowColor: '#2D6A4F',
+    shadowOpacity: 0.3,
     shadowRadius: 10,
-
-    // Sombra para Android
-    elevation: 3,
+    marginBottom: 15,
   },
-
-  // Título do card com ícone e nome da estatística
-  cardTitle: {
-    fontSize: 18,
-    color: '#2E7D32',
+  avatarInitial: {
+    fontSize: 40,
     fontWeight: 'bold',
+    color: '#FFF',
+  },
+  userName: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#212529',
+  },
+  userEmail: {
+    fontSize: 14,
+    color: '#6C757D',
+    marginTop: 4,
+  },
+  levelBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#2E7D32',
+    paddingHorizontal: 15,
+    paddingVertical: 8,
+    borderRadius: 20,
+    marginTop: 15,
+    gap: 8,
+  },
+  levelBadgeText: {
+    color: '#FFF',
+    fontWeight: 'bold',
+    fontSize: 13,
+  },
+  statsGrid: {
+    flexDirection: 'row',
+    gap: 15,
+    marginBottom: 25,
+  },
+  statCard: {
+    flex: 1,
+    backgroundColor: '#FFF',
+    borderRadius: 25,
+    padding: 20,
+    alignItems: 'center',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+  },
+  statIconBox: {
+    width: 45,
+    height: 45,
+    borderRadius: 15,
+    justifyContent: 'center',
+    alignItems: 'center',
     marginBottom: 10,
   },
-
-  // Valor numérico em destaque dentro do card
-  bigNumber: {
-    fontSize: 32,
+  statValue: {
+    fontSize: 20,
     fontWeight: 'bold',
-    color: '#212121',
+    color: '#212529',
   },
-
-  // Texto secundário abaixo do número (ex: "Eco Guardião")
-  subtitle: {
-    color: '#757575',
-    marginTop: 5,
+  statLabel: {
+    fontSize: 12,
+    color: '#6C757D',
+    marginTop: 2,
   },
-
-  // Botão de logout em vermelho — ação de saída da conta
-  logoutButton: {
-    backgroundColor: '#d32f2f',
-    padding: 18,
-    borderRadius: 16,
-    marginTop: 20,
-    marginBottom: 40,
+  sectionContainer: {
+    backgroundColor: '#FFF',
+    borderRadius: 25,
+    padding: 25,
+    marginBottom: 30,
+    elevation: 1,
+    shadowColor: '#000',
+    shadowOpacity: 0.03,
+    shadowRadius: 5,
   },
-
-  // Texto centralizado e em branco dentro do botão de logout
-  logoutText: {
-    color: '#FFFFFF',
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#212529',
+    marginBottom: 25,
     textAlign: 'center',
+  },
+  impactRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+  },
+  impactItem: {
+    alignItems: 'center',
+  },
+  impactValue: {
+    fontSize: 18,
     fontWeight: 'bold',
+    color: '#212529',
+    marginTop: 10,
+  },
+  impactLabel: {
+    fontSize: 12,
+    color: '#6C757D',
+    marginTop: 2,
+  },
+  logoutFullButton: {
+    backgroundColor: '#D32F2F', // Vermelho para logout
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 18,
+    borderRadius: 20,
+    elevation: 3,
+    shadowColor: '#D32F2F',
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+  },
+  logoutFullButtonText: {
+    color: '#FFF',
     fontSize: 16,
+    fontWeight: 'bold',
   },
 
+  /* ESTILOS DO MODAL PERSONALIZADO */
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)', // Escurece o fundo
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalContent: {
+    backgroundColor: '#FFF',
+    width: '100%',
+    borderRadius: 30,
+    padding: 25,
+    alignItems: 'center',
+  },
+  modalIconBg: {
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    backgroundColor: '#FFEBEE',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 15,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#212529',
+    marginBottom: 8,
+  },
+  modalText: {
+    fontSize: 16,
+    color: '#6C757D',
+    textAlign: 'center',
+    marginBottom: 25,
+  },
+  modalButtonsRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  cancelBtn: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 15,
+    backgroundColor: '#F8F9FA',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E9ECEF',
+  },
+  cancelBtnText: {
+    fontSize: 15,
+    fontWeight: 'bold',
+    color: '#495057',
+  },
+  confirmBtn: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 15,
+    backgroundColor: '#D32F2F',
+    alignItems: 'center',
+  },
+  confirmBtnText: {
+    fontSize: 15,
+    fontWeight: 'bold',
+    color: '#FFF',
+  },
 });
