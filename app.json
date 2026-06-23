@@ -2,6 +2,7 @@
   "expo": {
     "name": "EcoMatch",
     "slug": "EcoMatch",
+    "privacy": "public",
     "version": "1.0.9",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -37,7 +38,18 @@
     "web": {
       "favicon": "./assets/favicon.png"
     },
-    "plugins": [
-    ]
+    "plugins": [],
+    "extra": {
+      "eas": {
+        "projectId": "52766cb3-33be-4643-9c0d-1c26f3a2feda"
+      }
+    },
+    "owner": "mariaclara_21",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/52766cb3-33be-4643-9c0d-1c26f3a2feda"
+    }
   }
 }

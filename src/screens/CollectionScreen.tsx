@@ -162,7 +162,7 @@ export default function CollectionScreen() {
 
         {/* Dica do Dia */}
         <View style={styles.tipOfTheDay}>
-          <Text style={styles.tipTitle}>💡 Dica de Hoje</Text>
+          <Text style={styles.tipTitle}>💡 Dica </Text>
           <Text style={styles.tipDescription}>
             Separe o lixo orgânico do reciclável. O orgânico pode virar adubo através da compostagem doméstica!
           </Text>
@@ -186,18 +186,22 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: 20,
+    paddingBottom: 120, // espaço extra para a barra inferior
   },
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 10,
-    marginBottom: 30,
-  },
+  flexDirection: 'row',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+  marginTop: 10,
+  marginBottom: 30,
+  minHeight: 50,
+},
   welcomeText: {
     fontSize: 14,
     color: '#888',
     fontWeight: '600',
+    marginTop: 15,
+    
   },
   title: {
     fontSize: 26,
@@ -205,40 +209,43 @@ const styles = StyleSheet.create({
     color: '#1A1A1A',
   },
   progressBadge: {
-    backgroundColor: '#E8F5E9',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-  },
-  progressText: {
-    color: '#2E7D32',
-    fontWeight: '700',
-    fontSize: 12,
-  },
-  grid: {
-    gap: 16,
-  },
-  card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 24,
-    padding: 16,
-    borderWidth: 2,
-    borderColor: '#F5F5F5',
-    // Sombra leve
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    elevation: 2,
-  },
-  cardExpanded: {
-    backgroundColor: '#FFFFFF',
-    shadowOpacity: 0.1,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
+  backgroundColor: '#E8F5E9',
+  paddingHorizontal: 12,
+  paddingVertical: 8,
+  borderRadius: 20,
+  justifyContent: 'center',
+  alignItems: 'center',
+},
+progressText: {
+  color: '#2E7D32',
+  fontWeight: '700',
+  fontSize: 12,
+  lineHeight: 20,
+},
+grid: {
+  gap: 16,
+},
+card: {
+  backgroundColor: '#FFFFFF',
+  borderRadius: 24,
+  padding: 16,
+  borderWidth: 2,
+  borderColor: '#F5F5F5',
+  // Sombra leve
+  shadowColor: '#000',
+  shadowOffset: { width: 0, height: 4 },
+  shadowOpacity: 0.05,
+  shadowRadius: 10,
+  elevation: 2,
+},
+cardExpanded: {
+  backgroundColor: '#FFFFFF',
+  shadowOpacity: 0.1,
+},
+cardHeader: {
+  flexDirection: 'row',
+  alignItems: 'center',
+},
   iconCircle: {
     width: 50,
     height: 50,
