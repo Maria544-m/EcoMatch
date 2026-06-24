@@ -17,6 +17,10 @@ import {
   UIManager,
 } from 'react-native';
 
+import { useNavigation } from '@react-navigation/native';
+
+import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
+
 // Habilita animações de layout no Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -39,6 +43,9 @@ interface MaterialDetail {
 // Componente Principal
 // ----------------------------------------------------------------------------
 export default function CollectionScreen() {
+
+  const navigation = useNavigation();
+
   // Estado para controlar qual card está expandido
   const [expandedId, setExpandedId] = useState<number | null>(null);
 
@@ -94,8 +101,11 @@ export default function CollectionScreen() {
       <ScrollView 
         style={styles.container}
         contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
-      >
+        showsVerticalScrollIndicator={false} >
+          {/* Botão de Voltar para a Home */}
+          <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
+            <Ionicons name="arrow-back" size={24} color="#2D6A4F" />
+          </TouchableOpacity>
         {/* Header Estilo Dashboard */}
         <View style={styles.header}>
           <View>
@@ -103,7 +113,7 @@ export default function CollectionScreen() {
             <Text style={styles.title}>Reciclagem Inteligente</Text>
           </View>
           <View style={styles.progressBadge}>
-            <Text style={styles.progressText}>🌱 Ativo</Text>
+            <Text style={styles.progressText}>♻️ Ativo</Text>
           </View>
         </View>
 
@@ -179,7 +189,7 @@ export default function CollectionScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#ffffff',
+    backgroundColor: '#F8F9FA',
   },
   container: {
     flex: 1,
@@ -203,6 +213,21 @@ const styles = StyleSheet.create({
     marginTop: 15,
     
   },
+
+    backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: '#FFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 20,
+    elevation: 2, // Sombra no Android
+    shadowColor: '#000', // Sombra no iOS
+    shadowOpacity: 0.05,
+    shadowRadius: 5,
+  }, 
+
   title: {
     fontSize: 26,
     fontWeight: '800',
@@ -213,6 +238,7 @@ const styles = StyleSheet.create({
   paddingHorizontal: 12,
   paddingVertical: 8,
   borderRadius: 20,
+   marginTop: -120,
   justifyContent: 'center',
   alignItems: 'center',
 },

@@ -1,9 +1,7 @@
-// ============================================================
 // RegisterScreen.tsx
 // Tela de cadastro de novos usuários no aplicativo EcoMatch
 // Cria a conta no Firebase Auth, atualiza o displayName e
 // salva o perfil completo do usuário na coleção 'users' do Firestore
-// ============================================================
 
 import React, { useState } from 'react';
 
@@ -51,21 +49,21 @@ interface RegisterScreenProps {
 export default function RegisterScreen({ navigation }: RegisterScreenProps) {
 
   // Estados do formulário de cadastro
-  const [name,            setName]            = useState('');
-  const [email,           setEmail]           = useState('');
-  const [cpf,             setCpf]             = useState('');
-  const [phone,           setPhone]           = useState('');
-  const [password,        setPassword]        = useState('');
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [cpf, setCpf] = useState('');
+  const [phone, setPhone] = useState('');
+  const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
 
   // Estados de visibilidade dos campos de senha
-  const [showPassword,        setShowPassword]        = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   // Estados de feedback visual para o usuário
-  const [message,      setMessage]      = useState('');
+  const [message, setMessage] = useState('');
   const [messageColor, setMessageColor] = useState('#d32f2f'); // Vermelho por padrão
-  const [loading,      setLoading]      = useState(false);
+  const [loading, setLoading] = useState(false);
 
   // -------------------------------------------------------
   // Valida o CPF usando o algoritmo oficial de dígitos verificadores
@@ -194,15 +192,15 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
         phone,
 
         // Campos de gamificação inicializados com zero
-        ecoScore:     0,
-        xp:           0,
+        ecoScore: 0,
+        xp: 0,
         missionsDone: 0,
-        treesHelped:  0,
-        waterSaved:   0,
-        co2Avoided:   0,
+        treesHelped: 0,
+        waterSaved: 0,
+        co2Avoided: 0,
 
         // Perfil padrão — diferente de 'admin' para controle de acesso
-        role:      'user',
+        role: 'user',
 
         // Data de criação para auditoria e ordenação
         createdAt: new Date(),
@@ -322,11 +320,11 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
                 placeholder="Nome Completo"
                 placeholderTextColor="#999"
                 style={[
-    styles.input,
-    Platform.OS === 'web'
-      ? ({ outlineStyle: 'none' } as any)
-      : {},
-  ]}
+                  styles.input,
+                  Platform.OS === 'web'
+                    ? ({ outlineStyle: 'none' } as any)
+                    : {},
+                ]}
                 value={name}
                 onChangeText={setName}
               />
@@ -344,11 +342,11 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
                 placeholder="E-mail"
                 placeholderTextColor="#999"
                 style={[
-    styles.input,
-    Platform.OS === 'web'
-      ? ({ outlineStyle: 'none' } as any)
-      : {},
-  ]}
+                  styles.input,
+                  Platform.OS === 'web'
+                    ? ({ outlineStyle: 'none' } as any)
+                    : {},
+                ]}
                 value={email}
                 keyboardType="email-address"
                 autoCapitalize="none"
@@ -368,11 +366,11 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
                 placeholder="CPF (somente números)"
                 placeholderTextColor="#999"
                 style={[
-    styles.input,
-    Platform.OS === 'web'
-      ? ({ outlineStyle: 'none' } as any)
-      : {},
-  ]}
+                  styles.input,
+                  Platform.OS === 'web'
+                    ? ({ outlineStyle: 'none' } as any)
+                    : {},
+                ]}
                 value={cpf}
                 keyboardType="numeric"
                 maxLength={11}
@@ -392,11 +390,11 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
                 placeholder="Celular com DDD"
                 placeholderTextColor="#999"
                 style={[
-    styles.input,
-    Platform.OS === 'web'
-      ? ({ outlineStyle: 'none' } as any)
-      : {},
-  ]}
+                  styles.input,
+                  Platform.OS === 'web'
+                    ? ({ outlineStyle: 'none' } as any)
+                    : {},
+                ]}
                 value={phone}
                 keyboardType="phone-pad"
                 maxLength={11}
@@ -416,11 +414,11 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
                 placeholder="Senha"
                 placeholderTextColor="#999"
                 style={[
-    styles.input,
-    Platform.OS === 'web'
-      ? ({ outlineStyle: 'none' } as any)
-      : {},
-  ]}
+                  styles.input,
+                  Platform.OS === 'web'
+                    ? ({ outlineStyle: 'none' } as any)
+                    : {},
+                ]}
                 secureTextEntry={!showPassword}
                 value={password}
                 onChangeText={setPassword}
@@ -449,86 +447,54 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
                 placeholder="Confirmar Senha"
                 placeholderTextColor="#999"
                 style={[
-    styles.input,
-    Platform.OS === 'web'
-      ? ({ outlineStyle: 'none' } as any)
-      : {},
-  ]}
+                  styles.input,
+                  Platform.OS === 'web'
+                    ? ({ outlineStyle: 'none' } as any)
+                    : {},
+                ]}
                 secureTextEntry={!showConfirmPassword}
                 value={confirmPassword}
-                onChangeText={setConfirmPassword}
-              />
-              <TouchableOpacity
-                onPress={() => setShowConfirmPassword(!showConfirmPassword)}
-                style={styles.eyeIcon}
-              >
-                <Ionicons
-                  name={showConfirmPassword ? 'eye-off-outline' : 'eye-outline'}
-                  size={22}
-                  color="#2E7D32"
-                />
+                onChangeText={setConfirmPassword} />
+              <TouchableOpacity onPress={() => setShowConfirmPassword(!showConfirmPassword)} style={styles.eyeIcon}>
+                <Ionicons name={showConfirmPassword ? 'eye-off-outline' : 'eye-outline'} size={22} color="#2E7D32" />
               </TouchableOpacity>
             </View>
 
             {/* Mensagem de feedback — só exibida quando não estiver vazia */}
             {message ? (
-              <Text style={[styles.message, { color: messageColor }]}>
-                {message}
-              </Text>
+              <Text style={[styles.message, { color: messageColor }]}> {message} </Text>
             ) : null}
 
             {/* Botão de cadastro com gradiente verde e spinner durante loading */}
-            <TouchableOpacity
-              activeOpacity={0.8}
-              onPress={handleRegister}
-              disabled={loading} // Desabilita o botão enquanto processa
-            >
-              <LinearGradient
-                colors={['#43A047', '#2E7D32']}
-                style={styles.button}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-              >
+            <TouchableOpacity activeOpacity={0.8} onPress={handleRegister} disabled={loading}> 
+
+              <LinearGradient colors={['#43A047', '#2E7D32']} style={styles.button} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
                 {loading ? (
                   // Spinner exibido enquanto o cadastro está em andamento
                   <ActivityIndicator color="#FFFFFF" />
                 ) : (
                   <View style={styles.buttonContent}>
                     <View style={styles.buttonLeafCircle}>
-                      <MaterialCommunityIcons
-                        name="leaf"
-                        size={16}
-                        color="#FFF"
-                      />
+                      <MaterialCommunityIcons name="leaf" size={16} color="#FFF" />
                     </View>
                     <Text style={styles.buttonText}>Cadastrar</Text>
                     <Ionicons name="chevron-forward" size={24} color="#FFF" />
                   </View>
                 )}
               </LinearGradient>
+
             </TouchableOpacity>
-
           </View>
-
+          
           {/* Link para a tela de login para usuários já cadastrados */}
-          <TouchableOpacity
-            onPress={() => navigation.navigate('Login')}
-            style={styles.loginContainer}
-          >
-            <Text style={styles.loginTextPrefix}>
-              Já tem uma conta?{' '}
-            </Text>
-            <Text style={styles.loginTextAction}>
-              Faça Login
-            </Text>
+          <TouchableOpacity onPress={() => navigation.navigate('Login')} style={styles.loginContainer} >
+            <Text style={styles.loginTextPrefix}> Já tem uma conta?{' '} </Text>
+            <Text style={styles.loginTextAction}> Faça Login </Text>
           </TouchableOpacity>
-
         </ScrollView>
 
       </KeyboardAvoidingView>
-
     </SafeAreaView>
-
   );
 }
 

@@ -10,7 +10,8 @@ import {
   Linking,
   Dimensions,
   Platform,
-  Animated
+  Animated,
+  Alert
 } from 'react-native';
 import MapView, { Marker, PROVIDER_GOOGLE, Callout } from 'react-native-maps';
 import * as Location from 'expo-location';
@@ -47,14 +48,14 @@ const MapScreen = () => {
       duration: 300,
       useNativeDriver: true,
     }).start();
-  }, [isMenuOpen]);
+  }, [isMenuOpen, width]);
 
   useEffect(() => {
     (async () => {
       try {
         let { status } = await Location.requestForegroundPermissionsAsync();
         if (status !== 'granted') {
-          setError('Permissão negada.');
+          setError('Permissão de localização negada. Por favor, habilite nas configurações do seu dispositivo.');
           setLoading(false);
           return;
         }
@@ -66,7 +67,9 @@ const MapScreen = () => {
           longitudeDelta: 0.02,
         });
         setLoading(false);
-      } catch (err) {
+      } catch (err: any) {
+        console.error("Erro ao obter localização:", err);
+        setError('Não foi possível obter sua localização. Verifique suas configurações de GPS.');
         setLoading(false);
       }
     })();
@@ -74,6 +77,7 @@ const MapScreen = () => {
 
   const loadPoints = useCallback(async () => {
     if (!location) return;
+    setError(null); // Limpa erros anteriores
     try {
       const data = await fetchRecyclingPoints(
         location.latitude,
@@ -81,17 +85,25 @@ const MapScreen = () => {
         selectedWasteTypes
       );
       setPoints(data);
-      if (data.length > 0 && selectedWasteTypes.length > 0) {
-        const nearest = data[0];
+      if (data.length === 0 && selectedWasteTypes.length > 0) {
+        Alert.alert("Nenhum ponto encontrado", "Não encontramos pontos de reciclagem para os tipos selecionados nesta área.");
+      } else if (data.length === 0 && selectedWasteTypes.length === 0) {
+        Alert.alert("Nenhum ponto encontrado", "Não encontramos pontos de reciclagem nesta área. Tente ajustar sua localização ou filtros.");
+      }
+
+      if (data.length > 0) {
+        // Anima para o primeiro ponto encontrado ou para a localização do usuário se não houver filtros
+        const targetLocation = selectedWasteTypes.length > 0 ? data[0] : location;
         mapRef.current?.animateToRegion({
-          latitude: nearest.lat,
-          longitude: nearest.lon,
+          latitude: targetLocation.lat,
+          longitude: targetLocation.lon,
           latitudeDelta: 0.01,
           longitudeDelta: 0.01,
         }, 1000);
       }
-    } catch (err) {
-      setError('Erro na conexão.');
+    } catch (err: any) {
+      console.error("Erro ao carregar pontos:", err);
+      setError(err.message || 'Erro ao carregar pontos de reciclagem. Tente novamente.');
     }
   }, [location, selectedWasteTypes]);
 
@@ -108,11 +120,12 @@ const MapScreen = () => {
     );
   };
 
-  if (loading && !location) {
+  if (loading || !location) {
     return (
       <View style={styles.center}>
         <ActivityIndicator size="large" color="#4CAF50" />
         <Text style={styles.loadingText}>Carregando EcoMatch...</Text>
+        {error && <Text style={styles.errorText}>{error}</Text>}
       </View>
     );
   }
@@ -120,8 +133,8 @@ const MapScreen = () => {
   return (
     <View style={styles.container}>
       {/* Botão para abrir o menu */}
-      <TouchableOpacity 
-        style={styles.menuButton} 
+      <TouchableOpacity
+        style={styles.menuButton}
         onPress={() => setIsMenuOpen(true)}
       >
         <Ionicons name="filter" size={24} color="white" />
@@ -133,6 +146,7 @@ const MapScreen = () => {
         provider={PROVIDER_GOOGLE}
         initialRegion={location}
         showsUserLocation={true}
+        onPress={() => setSelectedPoint(null)} // Fecha o modal ao clicar no mapa
       >
         {points.map(point => (
           <Marker
@@ -155,14 +169,14 @@ const MapScreen = () => {
 
       {/* Overlay escuro quando o menu está aberto */}
       {isMenuOpen && (
-        <TouchableOpacity 
-          style={styles.overlay} 
-          activeOpacity={1} 
-          onPress={() => setIsMenuOpen(false)} 
+        <TouchableOpacity
+          style={styles.overlay}
+          activeOpacity={1}
+          onPress={() => setIsMenuOpen(false)}
         />
       )}
 
-      {/* Menu Lateral Animado (Igual à Web) */}
+      {/* Menu Lateral Animado */}
       <Animated.View style={[styles.sideMenu, { transform: [{ translateX: slideAnim }] }]}>
         <View style={styles.menuHeader}>
           <Text style={styles.menuTitle}>Filtros</Text>
@@ -231,6 +245,40 @@ const MapScreen = () => {
           </View>
         </View>
       </Modal>
+      {error && (
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorText}>{error}</Text>
+          <TouchableOpacity onPress={() => {
+            setError(null);
+            if (!location) {
+              // Tenta obter a localização novamente se o erro for de permissão/localização
+              (async () => {
+                try {
+                  let { status } = await Location.requestForegroundPermissionsAsync();
+                  if (status === 'granted') {
+                    let userLocation = await Location.getCurrentPositionAsync({});
+                    setLocation({
+                      latitude: userLocation.coords.latitude,
+                      longitude: userLocation.coords.longitude,
+                      latitudeDelta: 0.02,
+                      longitudeDelta: 0.02,
+                    });
+                  } else {
+                    setError('Permissão de localização negada. Por favor, habilite nas configurações do seu dispositivo.');
+                  }
+                } catch (err: any) {
+                  setError('Não foi possível obter sua localização. Verifique suas configurações de GPS.');
+                }
+              })();
+            } else {
+              // Tenta recarregar os pontos se o erro for de carregamento
+              loadPoints();
+            }
+          }} style={styles.retryButton}>
+            <Text style={styles.retryButtonText}>Tentar Novamente</Text>
+          </TouchableOpacity>
+        </View>
+      )}
     </View>
   );
 };
@@ -239,6 +287,7 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   loadingText: { marginTop: 10, color: '#666' },
+  errorText: { color: 'red', textAlign: 'center', marginTop: 10, paddingHorizontal: 20 },
   map: { width, height },
   menuButton: {
     position: 'absolute',
@@ -263,7 +312,7 @@ const styles = StyleSheet.create({
     top: 0,
     bottom: 0,
     left: 0,
-    width: width * 0.45,
+    width: width * 0.7,
     backgroundColor: 'white',
     zIndex: 30,
     padding: 20,
@@ -306,7 +355,29 @@ const styles = StyleSheet.create({
   tag: { backgroundColor: '#E8F5E9', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, marginRight: 8, marginBottom: 8 },
   tagText: { fontSize: 11, color: '#2E7D32', fontWeight: 'bold' },
   gpsButton: { backgroundColor: '#4CAF50', flexDirection: 'row', padding: 16, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
-  gpsButtonText: { color: 'white', fontWeight: 'bold', fontSize: 16 }
+  gpsButtonText: { color: 'white', fontWeight: 'bold', fontSize: 16 },
+  errorContainer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'rgba(255, 0, 0, 0.8)',
+    padding: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 40,
+  },
+  retryButton: {
+    marginTop: 10,
+    backgroundColor: 'white',
+    paddingHorizontal: 15,
+    paddingVertical: 8,
+    borderRadius: 10,
+  },
+  retryButtonText: {
+    color: 'red',
+    fontWeight: 'bold',
+  }
 });
 
 export default MapScreen;

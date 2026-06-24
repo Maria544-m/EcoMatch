@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, StyleSheet, ActivityIndicator, Text, TouchableOpacity, ScrollView } from 'react-native';
-import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
-import L from 'leaflet';
+import { View, StyleSheet, ActivityIndicator, Text, TouchableOpacity, ScrollView, Alert } from 'react-native';
+import { MapContainer, TileLayer, Marker, Popup, useMap, useMapEvents } from 'react-leaflet';
+import L, { Map as LeafletMap } from 'leaflet'; // Importa Map como LeafletMap para evitar conflito e tipagem
 // @ts-ignore
 import 'leaflet/dist/leaflet.css';
 import * as Location from 'expo-location';
@@ -49,10 +49,22 @@ const MapController = ({ center, points }: { center: [number, number], points: a
   const map = useMap();
   useEffect(() => {
     if (points.length > 0) {
-      // Se houver pontos, ajusta a visão para englobar o primeiro ou o centro
+      const bounds = L.latLngBounds(points.map(p => [p.lat, p.lon]));
+      map.fitBounds(bounds, { padding: [50, 50] }); // Ajusta a visão para englobar todos os marcadores
+    } else if (center) {
       map.setView(center, 14);
     }
   }, [center, points, map]);
+  return null;
+};
+
+// Novo componente para lidar com eventos do mapa, como cliques
+const MapEventHandler = ({ setSelectedPoint }: { setSelectedPoint: (point: any) => void }) => {
+  useMapEvents({
+    click: () => {
+      setSelectedPoint(null); // Fecha o sideCard ao clicar no mapa
+    },
+  });
   return null;
 };
 
@@ -63,13 +75,14 @@ const MapScreen = () => {
   const [selectedWasteTypes, setSelectedWasteTypes] = useState<string[]>([]);
   const [selectedPoint, setSelectedPoint] = useState<any>(null);
   const [isMenuOpen, setIsMenuOpen] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
       try {
         let { status } = await Location.requestForegroundPermissionsAsync();
         if (status !== 'granted') {
-          alert('Precisamos da sua localização!');
+          setError('Permissão de localização negada. Por favor, habilite nas configurações do seu navegador.');
           setLoading(false);
           return;
         }
@@ -79,8 +92,9 @@ const MapScreen = () => {
           longitude: userLocation.coords.longitude,
         });
         setLoading(false);
-      } catch (e) {
+      } catch (e: any) {
         console.error(e);
+        setError('Não foi possível obter sua localização. Verifique suas configurações de GPS.');
         setLoading(false);
       }
     })();
@@ -88,19 +102,28 @@ const MapScreen = () => {
 
   const loadPoints = useCallback(async () => {
     if (!location) return;
-    const data = await fetchRecyclingPoints(
-      location.latitude,
-      location.longitude,
-      selectedWasteTypes
-    );
-    setPoints(data);
+    setError(null); // Limpa erros anteriores
+    try {
+      const data = await fetchRecyclingPoints(
+        location.latitude,
+        location.longitude,
+        selectedWasteTypes
+      );
+      setPoints(data);
+      if (data.length === 0 && selectedWasteTypes.length > 0) {
+        Alert.alert("Nenhum ponto encontrado", "Não encontramos pontos de reciclagem para os tipos selecionados nesta área.");
+      } else if (data.length === 0 && selectedWasteTypes.length === 0) {
+        Alert.alert("Nenhum ponto encontrado", "Não encontramos pontos de reciclagem nesta área. Tente ajustar sua localização ou filtros.");
+      }
+    } catch (err: any) {
+      console.error("Erro ao carregar pontos:", err);
+      setError(err.message || 'Erro ao carregar pontos de reciclagem. Tente novamente.');
+    }
   }, [location, selectedWasteTypes]);
 
   useEffect(() => {
     if (location) {
-      const timer = setTimeout(() => {
-        loadPoints();
-      }, 300);
+      const timer = setTimeout(loadPoints, 300);
       return () => clearTimeout(timer);
     }
   }, [location, selectedWasteTypes, loadPoints]);
@@ -115,11 +138,12 @@ const MapScreen = () => {
     window.open(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lon}`, '_blank');
   };
 
-  if (loading && !location) {
+  if (loading || !location) {
     return (
       <View style={styles.center}>
         <ActivityIndicator size="large" color="#4CAF50" />
         <Text style={{ marginTop: 10 }}>Carregando EcoMatch...</Text>
+        {error && <Text style={styles.errorText}>{error}</Text>}
       </View>
     );
   }
@@ -128,8 +152,8 @@ const MapScreen = () => {
     <View style={styles.container}>
       {/* Botão flutuante para abrir menu quando estiver fechado */}
       {!isMenuOpen && (
-        <TouchableOpacity 
-          style={styles.menuToggleButton} 
+        <TouchableOpacity
+          style={styles.menuToggleButton}
           onPress={() => setIsMenuOpen(true)}
         >
           <Ionicons name="menu" size={28} color="white" />
@@ -145,9 +169,9 @@ const MapScreen = () => {
               <Ionicons name="chevron-back" size={24} color="#666" />
             </TouchableOpacity>
           </View>
-          
+
           <Text style={styles.filterSubtitle}>O que você quer descartar?</Text>
-          
+
           <ScrollView showsVerticalScrollIndicator={false}>
             <View style={styles.chipGrid}>
               {Object.keys(WASTE_TAGS).map(type => {
@@ -182,13 +206,14 @@ const MapScreen = () => {
             zoom={13}
             style={{ height: '100%', width: '100%' }}
           >
+            <MapEventHandler setSelectedPoint={setSelectedPoint} /> {/* Adiciona o novo componente para lidar com cliques no mapa */}
             <TileLayer
               attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
               url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             />
-            
-            <MapController 
-              center={selectedPoint ? [selectedPoint.lat, selectedPoint.lon] : [location.latitude, location.longitude]} 
+
+            <MapController
+              center={selectedPoint ? [selectedPoint.lat, selectedPoint.lon] : [location.latitude, location.longitude]}
               points={points}
             />
 
@@ -197,8 +222,8 @@ const MapScreen = () => {
             </Marker>
 
             {points.map(point => (
-              <Marker 
-                key={point.id} 
+              <Marker
+                key={point.id}
                 position={[point.lat, point.lon]}
                 icon={recyclingIcon}
                 eventHandlers={{
@@ -245,6 +270,38 @@ const MapScreen = () => {
           </ScrollView>
         </View>
       )}
+      {error && (
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorText}>{error}</Text>
+          <TouchableOpacity onPress={() => {
+            setError(null);
+            if (!location) {
+              // Tenta obter a localização novamente se o erro for de permissão/localização
+              (async () => {
+                try {
+                  let { status } = await Location.requestForegroundPermissionsAsync();
+                  if (status === 'granted') {
+                    let userLocation = await Location.getCurrentPositionAsync({});
+                    setLocation({
+                      latitude: userLocation.coords.latitude,
+                      longitude: userLocation.coords.longitude,
+                    });
+                  } else {
+                    setError('Permissão de localização negada. Por favor, habilite nas configurações do seu navegador.');
+                  }
+                } catch (err: any) {
+                  setError('Não foi possível obter sua localização. Verifique suas configurações de GPS.');
+                }
+              })();
+            } else {
+              // Tenta recarregar os pontos se o erro for de carregamento
+              loadPoints();
+            }
+          }} style={styles.retryButton}>
+            <Text style={styles.retryButtonText}>Tentar Novamente</Text>
+          </TouchableOpacity>
+        </View>
+      )}
     </View>
   );
 };
@@ -252,6 +309,7 @@ const MapScreen = () => {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#fff', flexDirection: 'row' },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  errorText: { color: 'red', textAlign: 'center', marginTop: 10, paddingHorizontal: 20 },
   menuToggleButton: {
     position: 'absolute',
     top: 20,
@@ -330,6 +388,28 @@ const styles = StyleSheet.create({
   tagText: { fontSize: 10, color: '#2E7D32', fontWeight: 'bold' },
   gpsButton: { backgroundColor: '#4CAF50', flexDirection: 'row', padding: 14, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   gpsButtonText: { color: 'white', fontWeight: 'bold', fontSize: 14 },
+  errorContainer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'rgba(255, 0, 0, 0.8)',
+    padding: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 40,
+  },
+  retryButton: {
+    marginTop: 10,
+    backgroundColor: 'white',
+    paddingHorizontal: 15,
+    paddingVertical: 8,
+    borderRadius: 10,
+  },
+  retryButtonText: {
+    color: 'red',
+    fontWeight: 'bold',
+  }
 });
 
 export default MapScreen;

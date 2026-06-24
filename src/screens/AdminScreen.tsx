@@ -88,22 +88,13 @@ export default function AdminScreen({ navigation }: AdminScreenProps) {
   // Tela de carregamento exibida enquanto os dados são buscados
   // -------------------------------------------------------
   if (loading) {
-
     return (
-
       <View style={styles.loadingContainer}>
-
-        <ActivityIndicator
-          size="large"
-          color="#2E7D32"
-        />
-
+        <ActivityIndicator size="large" color="#2E7D32" />
         <Text style={styles.loadingText}>
           Carregando painel...
         </Text>
-
       </View>
-
     );
   }
 
@@ -111,21 +102,10 @@ export default function AdminScreen({ navigation }: AdminScreenProps) {
   // Renderização principal: cards de resumo + botões de navegação
   // -------------------------------------------------------
   return (
+    <ScrollView style={styles.container} showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
+      <Text style={styles.title}> 🛠️ Painel Administrativo </Text>
 
-    <ScrollView
-      style={styles.container}
-      showsVerticalScrollIndicator={false}
-      contentContainerStyle={styles.content}
-    >
-
-      <Text style={styles.title}>
-        🛠️ Painel Administrativo
-      </Text>
-
-      <Text style={styles.subtitle}>
-        Gerencie usuários, missões e EcoPontos.
-      </Text>
-
+      <Text style={styles.subtitle}> Gerencie usuários, missões e EcoPontos. </Text>
       {/* Card com total de usuários cadastrados */}
       <View style={styles.card}>
 

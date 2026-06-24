@@ -3,85 +3,72 @@ import axios from 'axios';
 
 // Objeto que relaciona os tipos de resíduos com as tags do OpenStreetMap
 export const WASTE_TAGS: { [key: string]: string } = {
-
-  // Plástico
   plastico: 'recycling:plastic',
-
-  // Papel
   papel: 'recycling:paper',
-
-  // Vidro
   vidro: 'recycling:glass',
-
-  // Metal
   metal: 'recycling:metal',
-
-  // Eletrônicos
   eletronicos: 'recycling:electronics',
-
-  // Pilhas e baterias
   pilhas: 'recycling:batteries',
+};
+
+// Função para realizar geocodificação reversa usando Nominatim
+const reverseGeocode = async (lat: number, lon: number): Promise<string> => {
+  try {
+    const nominatimUrl = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&zoom=18&addressdetails=1`;
+    const response = await axios.get(nominatimUrl, {
+      headers: {
+        'User-Agent': 'EcoMatch_Final_Check' // User-Agent é importante para Nominatim
+      },
+      timeout: 5000 // Curto timeout para geocodificação reversa
+    });
+
+    if (response.data && response.data.display_name) {
+      return response.data.display_name;
+    } else {
+      return "Endereço não encontrado via geocodificação";
+    }
+  } catch (error) {
+    console.error("Erro na geocodificação reversa:", error);
+    return "Endereço não disponível";
+  }
 };
 
 // Função responsável por buscar pontos de reciclagem próximos
 export const fetchRecyclingPoints = async (
-
-  // Latitude da localização do usuário
   lat: number,
-
-  // Longitude da localização do usuário
   lon: number,
-
-  // Lista de tipos de resíduos selecionados
   wasteTypes: string[] = []
-
 ) => {
-
   try {
-
-    // Raio de busca em metros (20 km)
-    const radius = 20000;
-
-    // Variável que armazenará os filtros da consulta
+    const radius = 20000; // Raio de busca em metros (20 km)
     let filters = '';
 
-    // Verifica se o usuário selecionou algum filtro
     if (wasteTypes.length > 0) {
-
-      // Cria consultas para cada tipo de resíduo selecionado
-      const tagQueries = wasteTypes.map(type => {
-
-        // Obtém a tag correspondente ao tipo selecionado
+      // Se filtros específicos forem selecionados, busca por eles E por pontos genéricos de reciclagem
+      const specificTagQueries = wasteTypes.map(type => {
         const tag = WASTE_TAGS[type];
-
-        // Retorna a consulta Overpass para nós e vias
         return `
           node["${tag}"="yes"](around:${radius},${lat},${lon});
           way["${tag}"="yes"](around:${radius},${lat},${lon});
         `;
-
       }).join('');
 
-      // Salva todas as consultas em uma única string
-      filters = tagQueries;
-
-    } else {
-
-      // Caso nenhum filtro seja selecionado,
-      // busca todos os pontos de reciclagem disponíveis
+      // Adiciona também a busca por pontos genéricos de reciclagem para complementar
       filters = `
-
-        // Pontos de reciclagem
+        ${specificTagQueries}
         node["amenity"="recycling"](around:${radius},${lat},${lon});
         way["amenity"="recycling"](around:${radius},${lat},${lon});
-
-        // Máquinas de coleta/reciclagem
         node["vending"="recycling"](around:${radius},${lat},${lon});
-
+      `;
+    } else {
+      // Caso nenhum filtro seja selecionado, busca todos os pontos de reciclagem disponíveis
+      filters = `
+        node["amenity"="recycling"](around:${radius},${lat},${lon});
+        way["amenity"="recycling"](around:${radius},${lat},${lon});
+        node["vending"="recycling"](around:${radius},${lat},${lon});
       `;
     }
 
-    // Monta a consulta completa para a Overpass API
     const query = `
       [out:json][timeout:30];
       (
@@ -90,95 +77,90 @@ export const fetchRecyclingPoints = async (
       out center;
     `;
 
-    // Cria a URL codificando a consulta
     const url =
       `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(query)}`;
 
-    // Exibe mensagem no terminal indicando início da busca
     console.log("Buscando pontos...");
-
-    // Faz a requisição para a API
     const response = await axios.get(url, {
-
-      // Identificação da aplicação
       headers: {
         'User-Agent': 'EcoMatch_Final_Check'
       },
-
-      // Tempo máximo de espera da requisição (20 segundos)
       timeout: 20000
     });
 
-    // Verifica se não retornou resultados
     if (
       !response.data ||
       !response.data.elements ||
       response.data.elements.length === 0
     ) {
-
-      // Exibe mensagem no terminal
       console.log("Nenhum ponto encontrado nesta região.");
-
-      // Retorna lista vazia
       return [];
     }
 
-    // Exibe quantidade de pontos encontrados
     console.log(
       `Sucesso! Encontrados ${response.data.elements.length} pontos.`
     );
 
-    // Converte os dados da API para um formato mais fácil de usar
-    return response.data.elements.map((el: any) => ({
+    // Processa os elementos, removendo duplicatas e priorizando informações
+    const uniquePointsMap = new Map();
 
-      // ID único do ponto
-      id: el.id.toString(),
+    for (const el of response.data.elements) {
+      // Garante que o elemento tem coordenadas válidas
+      const pointLat = el.lat || el.center?.lat;
+      const pointLon = el.lon || el.center?.lon;
+      if (!pointLat || !pointLon) continue;
 
-      // Latitude do ponto
-      lat: el.lat || el.center?.lat,
+      const id = el.id.toString();
 
-      // Longitude do ponto
-      lon: el.lon || el.center?.lon,
+      let address = "Endereço não disponível";
+      if (el.tags["addr:full"]) {
+        address = el.tags["addr:full"];
+      } else if (el.tags["addr:street"]) {
+        address = `${el.tags["addr:street"]}${el.tags["addr:housenumber"] ? `, ${el.tags["addr:housenumber"]}` : ''}`;
+        if (el.tags["addr:city"]) address += `, ${el.tags["addr:city"]}`;
+        if (el.tags["addr:postcode"]) address += ` - ${el.tags["addr:postcode"]}`;
+      } else if (el.tags.address) { 
+        address = el.tags.address;
+      } else if (el.tags.description) { 
+        address = el.tags.description;
+      }
 
-      // Nome do local
-      name:
-        el.tags.name ||
-        el.tags.operator ||
-        "Ponto de Descarte",
+      // Se o endereço ainda estiver indisponível, tenta geocodificação reversa
+      if (address === "Endereço não disponível" || address === "Endereço próximo") {
+        address = await reverseGeocode(pointLat, pointLon);
+      }
 
-      // Endereço do local
-      address: el.tags["addr:street"]
-        ? `${el.tags["addr:street"]}, ${el.tags["addr:housenumber"] || ""}`
-        : "Endereço próximo",
+      // Lógica para extrair os tipos de resíduos aceitos
+      const acceptedTypes = Object.keys(el.tags)
+        .filter(t => t.startsWith('recycling:') && el.tags[t] === 'yes') 
+        .map(t => t.split(':')[1]);
 
-      // Horário de funcionamento
-      opening_hours: el.tags.opening_hours,
+      const point = {
+        id: id,
+        lat: pointLat,
+        lon: pointLon,
+        name:
+          el.tags.name ||
+          el.tags.operator ||
+          "Ponto de Descarte",
+        address: address,
+        opening_hours: el.tags.opening_hours,
+        phone:
+          el.tags.phone ||
+          el.tags['contact:phone'],
+        types: acceptedTypes.length > 0 ? acceptedTypes : ['Recicláveis (informação detalhada não disponível)'],
+      };
 
-      // Telefone de contato
-      phone:
-        el.tags.phone ||
-        el.tags['contact:phone'],
+      // Adiciona ou atualiza o ponto no mapa, priorizando informações mais completas
+      if (!uniquePointsMap.has(id) || (uniquePointsMap.get(id).address === "Endereço não disponível" && point.address !== "Endereço não disponível")) {
+        uniquePointsMap.set(id, point);
+      }
+    }
 
-      // Lista dos materiais aceitos pelo ponto
-      types: Object.keys(el.tags)
-
-        // Filtra apenas tags de reciclagem
-        .filter(t => t.startsWith('recycling:'))
-
-        // Remove o prefixo "recycling:"
-        .map(t => t.split(':')[1])
-
-    }));
+    return Array.from(uniquePointsMap.values());
 
   } catch (error) {
-
-    // Exibe erro caso a requisição falhe
-    console.error(
-      "Erro na conexão com o mapa:",
-      error
-    );
-
-    // Retorna lista vazia para evitar travamentos
-    return [];
+    console.error("Erro na conexão com o mapa:", error);
+    throw new Error("Não foi possível carregar os pontos de reciclagem. Tente novamente mais tarde.");
   }
 };

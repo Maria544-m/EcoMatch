@@ -10,6 +10,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 
+
 // 1. Importação da Tela de Animação
 import SplashScreen from '../screens/SplashScreen';
 
@@ -95,7 +96,7 @@ function BottomTabs() {
           if (route.name === 'Início') iconName = 'home';
           else if (route.name === 'Acervo') iconName = 'leaf';
           else if (route.name === 'Mapa') iconName = 'location';
-          else if (route.name === 'Prêmios') iconName = 'gift';
+          else if (route.name === 'Ranking') iconName = 'gift';
           else if (route.name === 'Admin') iconName = 'shield-checkmark-outline';
           else if (route.name === 'Perfil') iconName = 'person';
           return <Ionicons name={iconName} size={24} color={color} />;
@@ -105,7 +106,7 @@ function BottomTabs() {
       <Tab.Screen name="Início" component={HomeScreen} />
       <Tab.Screen name="Acervo" component={CollectionScreen} />
       <Tab.Screen name="Mapa" component={MapScreen} />
-      <Tab.Screen name="Prêmios" component={RewardsScreen} />
+      <Tab.Screen name="Ranking" component={RewardsScreen} />
       <Tab.Screen name="Perfil" component={ProfileScreen} />
       {isAdmin && <Tab.Screen name="Admin" component={AdminScreen} />}
     </Tab.Navigator>

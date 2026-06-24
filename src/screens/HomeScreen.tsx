@@ -71,9 +71,44 @@ export default function HomeScreen({ navigation }: any) {
     return () => unsubscribe();
   }, []);
 
-  const level = Math.floor(userData.xp / 300);
-  const xpNextLevel = 3000;
-  const xpProgress = Math.min((userData.xp / xpNextLevel) * 100, 100);
+  // =====================================================
+// Sistema de níveis EcoMatch
+// =====================================================
+
+const LEVELS = [
+  0,
+  500,
+  1000,
+  2000,
+  3500,
+  5000,
+  7000,
+  10000,
+];
+
+// Nível atual
+const level =
+  LEVELS.filter(
+    levelXp => userData.xp >= levelXp
+  ).length;
+
+// XP mínimo do nível atual
+const currentLevelXp =
+  LEVELS[level - 1] || 0;
+
+// XP necessário para o próximo nível
+const nextLevelXp =
+  LEVELS[level] ||
+  LEVELS[LEVELS.length - 1];
+
+// Progresso da barra
+const xpProgress = Math.min(
+  (
+    (userData.xp - currentLevelXp) /
+    (nextLevelXp - currentLevelXp)
+  ) * 100,
+  100
+);
 
   if (isLoading) {
     return (
@@ -124,12 +159,12 @@ export default function HomeScreen({ navigation }: any) {
           <View style={styles.xpSection}>
             <View style={styles.xpInfoRow}>
               <Text style={styles.xpCurrentText}>{userData.xp} XP</Text>
-              <Text style={styles.xpTargetText}>{xpNextLevel} XP</Text>
+              <Text style={styles.xpTargetText}> {nextLevelXp} XP </Text>
             </View>
             <View style={styles.progressBarBg}>
               <View style={[styles.progressBarFill, { width: `${xpProgress}%` }]} />
             </View>
-            <Text style={styles.rankTitle}>Eco Guardião Iniciante</Text>
+            <Text style={styles.rankTitle}> Eco Guardião Iniciante </Text>
           </View>
         </View>
 

@@ -1,7 +1,5 @@
 // ============================================================
 // ProfileScreen.tsx
-// Tela de Perfil modernizada para o App de Reciclagem
-// Desenvolvida para: Android e Web (Expo/React Native)
 // ============================================================
 
 import React, { useEffect, useState } from 'react';
@@ -110,7 +108,7 @@ export default function ProfileScreen() {
   return (
     <SafeAreaView style={styles.safeArea}>
       
-      {/* ── MODAL DE CONFIRMAÇÃO (Substitui o Alert nativo) ── */}
+      {/* ── MODAL DE CONFIRMAÇÃO ── */}
       <Modal
         animationType="fade" // Aparece suavemente
         transparent={true}    // Fundo semitransparente
