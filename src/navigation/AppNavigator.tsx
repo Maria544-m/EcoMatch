@@ -77,8 +77,8 @@ function BottomTabs() {
         tabBarHideOnKeyboard: true,
         tabBarStyle: {
           position: 'absolute',
-          left: 10,
-          right: 10,
+          left: 0,
+          right: 0,
           bottom: 0,
           height: 60,
           borderTopWidth: 0,

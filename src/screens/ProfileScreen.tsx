@@ -75,9 +75,19 @@ export default function ProfileScreen() {
     return () => unsubscribe();
   }, []);
 
-  // Cálculo simples de nível (Ex: cada 300 XP = 1 Nível)
-  const level = Math.floor(userData.xp / 300);
+  const LEVELS = [
+  0,
+  500,
+  1000,
+  2000,
+  3500,
+  5000,
+  7000,
+  10000,
+];
 
+const level =
+  LEVELS.filter(levelXp => userData.xp >= levelXp).length;
   // -------------------------------------------------------
   // Função para realizar o Logout definitivo
   // -------------------------------------------------------

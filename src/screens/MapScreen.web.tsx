@@ -166,7 +166,7 @@ const MapScreen = () => {
           <View style={styles.menuHeader}>
             <Text style={styles.filterTitle}>Filtros</Text>
             <TouchableOpacity onPress={() => setIsMenuOpen(false)}>
-              <Ionicons name="chevron-back" size={24} color="#666" />
+              <Ionicons name="chevron-forward" size={24} color="#666" />
             </TouchableOpacity>
           </View>
 
@@ -307,33 +307,60 @@ const MapScreen = () => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff', flexDirection: 'row' },
+  container: {
+  flex: 1,
+  backgroundColor: '#fff',
+},
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   errorText: { color: 'red', textAlign: 'center', marginTop: 10, paddingHorizontal: 20 },
   menuToggleButton: {
-    position: 'absolute',
-    top: 20,
-    left: 20,
-    zIndex: 1000,
-    backgroundColor: '#4CAF50',
-    padding: 10,
-    borderRadius: 10,
-    shadowColor: '#000',
-    shadowOpacity: 0.2,
-    shadowRadius: 5,
-    elevation: 5,
+  position: 'absolute',
+  top: 20,
+  right: 20,
+
+  width: 52,
+  height: 52,
+  borderRadius: 16,
+
+  backgroundColor: '#4CAF50',
+
+  justifyContent: 'center',
+  alignItems: 'center',
+
+  zIndex: 2000,
+
+  shadowColor: '#000',
+  shadowOffset: {
+    width: 0,
+    height: 3,
   },
+  shadowOpacity: 0.18,
+  shadowRadius: 8,
+
+  elevation: 8,
+},
   webFilterContainer: {
-    width: 280,
-    backgroundColor: 'white',
-    padding: 20,
-    borderRightWidth: 1,
-    borderRightColor: '#eee',
-    zIndex: 10,
-    shadowColor: '#000',
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
+  position: 'absolute',
+  top: 0,
+  right: 0,
+  width: 320,
+  height: '100%',
+  backgroundColor: '#fff',
+  paddingTop: 30,
+  paddingHorizontal: 20,
+  borderLeftWidth: 1,
+  borderLeftColor: '#E5E5E5',
+  zIndex: 999,
+  shadowColor: '#000',
+  shadowOffset: {
+    width: -2,
+    height: 0,
   },
+  shadowOpacity: 0.12,
+  shadowRadius: 12,
+
+  elevation: 10,
+},
   menuHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
   filterTitle: { fontSize: 20, fontWeight: 'bold', color: '#2E7D32' },
   filterSubtitle: { fontSize: 14, color: '#666', marginBottom: 15 },
