@@ -293,6 +293,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 10,
     marginBottom: 15,
+    marginTop: 0,
   },
   avatarInitial: {
     fontSize: 40,

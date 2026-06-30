@@ -71,9 +71,7 @@ export default function HomeScreen({ navigation }: any) {
     return () => unsubscribe();
   }, []);
 
-  // =====================================================
 // Sistema de níveis EcoMatch
-// =====================================================
 
 const LEVELS = [
   0,
